@@ -32,10 +32,6 @@ fi
 
 
 DOCKER_OPTS="$DOCKER_OPTS --gpus all"
-
-  # -e ROS_HOSTNAME=127.0.0.1 \
-  # -e ROS_MASTER_URI=http://127.0.0.1:11311/ \
-  # -v "/home/christie/projects/work/siw/subt/rosbag/:"$ROSBAG_MOUNT_DIR \
   	
 docker run -it \
   -e DISPLAY \
