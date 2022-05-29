@@ -35,6 +35,7 @@ RUN apt-get update  \
         wget \
         net-tools \
         iputils-ping \
+        unzip \
  && apt-get clean 
 
 # Add a user with the same user_id as the user outside the container
@@ -124,8 +125,6 @@ COPY ./docker_deps/libcudnn8-dev_8.2.2.26-1+cuda10.2_amd64.deb /home/developer/d
 RUN cd ~/deps/ \
 && sudo dpkg -i ~/deps/libcudnn8_8.2.2.26-1+cuda10.2_amd64.deb \
 && sudo dpkg -i ~/deps/libcudnn8-dev_8.2.2.26-1+cuda10.2_amd64.deb
-
-RUN sudo apt-get install unzip
 
 #install libtorch
 RUN cd ~/deps \
