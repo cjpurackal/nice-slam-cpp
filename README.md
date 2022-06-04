@@ -1,4 +1,4 @@
-# nice-slam-cpp
+# nice-slam-cpp(WIP)
 A cpp implementation of NICE-SLAM
 ## Installation
 
