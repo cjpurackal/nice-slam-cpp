@@ -26,13 +26,15 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR})
 
 file(GLOB src src/*.cpp)
+file(GLOB inputs src/inputs/*.cpp)
 
 add_executable(${PROJECT_NAME}
                ${src}
+               ${inputs}
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/
     ${OpenCV_INCLUDE_DIRS}
     ${TORCH_INCLUDE_DIRS}
 )
