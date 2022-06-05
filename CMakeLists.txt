@@ -25,18 +25,21 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 # project-wide paths
 include_directories(${PROJECT_SOURCE_DIR})
 
+file(GLOB miniz ${CMAKE_CURRENT_SOURCE_DIR}/deps/tinyexr/miniz.c)
 file(GLOB src src/*.cpp)
 file(GLOB inputs src/inputs/*.cpp)
 
 add_executable(${PROJECT_NAME}
+               ${miniz}
                ${src}
                ${inputs}
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/tinyexr
     ${OpenCV_INCLUDE_DIRS}
     ${TORCH_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/
 )
 
 target_link_libraries(${PROJECT_NAME}
