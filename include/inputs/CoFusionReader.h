@@ -8,7 +8,9 @@
 #include <stdio.h>
 #include <string>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
 #include <Eigen/Core>
+#include "tinyexr.h"
 
 class CoFusionReader
 {
@@ -19,11 +21,13 @@ class CoFusionReader
         void getNext();
         void getBack();
         bool hasMore();
-
+        void reset();
+        
         std::string input_folder;
         cv::Mat depth, rgb;
         Eigen::Matrix4f c2w;
 
+        int width, height;
         int fptr;
 };
 #endif /* COFUSIONREADER_H_ */
