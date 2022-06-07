@@ -18,6 +18,20 @@ include_directories(${Eigen3_INCLUDE_DIRS})
 list(APPEND CMAKE_PREFIX_PATH "/home/developer/deps/libtorch/")
 find_package(Torch REQUIRED)
 
+#cuda
+find_package(CUDA REQUIRED)
+include_directories(${CUDA_INCLUDE_DIRS})
+set(CUDA_HOST_COMPILER "/usr/bin/g++")
+set(BUILD_TESTS OFF CACHE BOOL "Build unit tests")
+set(CUDA_ARCH_PTX "" CACHE STRING "Specify 'virtual' PTX arch to build PTX intermediate code for. Example: 1.0 1.2 or 10 12")
+include(CudaComputeTargetFlags.cmake)
+APPEND_TARGET_ARCH_FLAGS()
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}  "-Xcompiler;-fPIC;-D_FORCE_INLINES;")
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "--ftz=true;--prec-div=false;--prec-sqrt=false")
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}  "-g")
+endif(CMAKE_BUILD_TYPE MATCHES Debug)
+
 #opencv 
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
