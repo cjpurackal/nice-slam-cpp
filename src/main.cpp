@@ -10,7 +10,7 @@ int main(int argc, const char* argv[])
 
   cfreader.getNext();
 
-  raySampler(0, 480, 0, 640,  360, 360, 320, 240, cfreader.rgb, cfreader.depth, cfreader.c2w);
+  keyframe_selection_overlap(0, 480, 0, 640,  360, 360, 320, 240, cfreader.rgb, cfreader.depth, cfreader.c2w);
 
   // while (cfreader.hasMore())
   // {
