@@ -3,7 +3,7 @@
 
 using namespace torch::indexing;
 
-void raySampler(int H0, int H1, int W0, int W1, int cx, int cy, int fx, int fy, cv::Mat rgb_, cv::Mat depth_, Eigen::Matrix4f c2w_)
+void raySampler(int H0, int H1, int W0, int W1, int fx, int fy, int cx, int cy, cv::Mat rgb_, cv::Mat depth_, Eigen::Matrix4f c2w_)
 {
 
 	int n = 100;
@@ -27,8 +27,8 @@ void raySampler(int H0, int H1, int W0, int W1, int cx, int cy, int fx, int fy, 
 	torch::Tensor depth = torch::from_blob(depth_.data, {depth_.size().height, depth_.size().width, 1});
 	torch::Tensor c2w = torch::from_blob(c2w_.data(), {4,4});
 
-	rgb = rgb.reshape(-1);
-	depth = depth.reshape({-1, 3});
+	depth = depth.reshape(-1);
+	rgb = rgb.reshape({-1, 3});
 
 	rgb = rgb.index({ind});
 	depth = depth.index({ind});
@@ -36,7 +36,7 @@ void raySampler(int H0, int H1, int W0, int W1, int cx, int cy, int fx, int fy, 
 	auto i_t = (i-cx)/fx;
 	auto j_t = (i-cy)/fy;
 
-	auto dirs = torch::stack({i_t,j_t,torch::ones_like(i)});
+	auto dirs = torch::stack({i_t,j_t,-torch::ones_like(i)}, -1);
 	dirs = dirs.reshape({-1, 1, 3});
 
 	auto tmp = dirs * c2w.index({Slice(None,3), Slice(None, 3)});

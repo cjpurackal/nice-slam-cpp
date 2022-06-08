@@ -10,7 +10,7 @@ int main(int argc, const char* argv[])
 
   cfreader.getNext();
 
-  raySampler(0, /*480*/4, 0, /*640*/2, 240, 320, 566, 566, cfreader.rgb, cfreader.depth, cfreader.c2w);
+  raySampler(0, 480, 0, 640,  360, 360, 320, 240, cfreader.rgb, cfreader.depth, cfreader.c2w);
 
   // while (cfreader.hasMore())
   // {
