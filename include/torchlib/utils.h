@@ -50,6 +50,8 @@ void keyframe_selection_overlap(int H0, int H1, int W0, int W1, int fx, int fy, 
 {
 
 	int n_samples =16;
+	int W =W1;
+	int H = H1;
 
 	torch::Tensor rays_o, rays_d, gt_color, gt_depth;
 	raySampler(H0, H1, W0, W1, fx, fy, cx, cy, rgb_, depth_, c2w_, rays_d, rays_o, gt_color, gt_depth);
@@ -82,13 +84,16 @@ void keyframe_selection_overlap(int H0, int H1, int W0, int W1, int fx, int fy, 
 		auto cam_cord_homo = torch::matmul(w2c, homo_vertices);
 		auto cam_cord = cam_cord_homo.index({Slice(None), Slice(None, 3)});
 
-		cam_cord = cam_cord.index({Slice(None), 0}) * -1;
+		cam_cord.index({Slice(None), 0}) = cam_cord.index({Slice(None), 0}) * -1;
 		auto uv = torch::matmul(K, cam_cord);
 		auto z = uv.index({Slice(None), Slice(-1, None)})+1e-5;
 		uv = uv.index({Slice(None), Slice(None, 2)})/z;
 		//uv to float conver here TODO
-		edge = 20;
-
+		int edge = 20;
+		auto mask = (uv.index({Slice(None), 0}) < W-edge) * (uv.index({Slice(None), 0}) > edge) * (uv.index({Slice(None), 1}) < H-edge) * (uv.index({Slice(None), 1}) > edge);
+		mask = mask & (z.index({Slice(None), Slice(None), 0}) < 0);
+		mask = mask.reshape(-1);
+		auto percentage_inside = mask.sum()/uv.sizes()[0];
 	}
 
 }
