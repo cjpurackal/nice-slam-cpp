@@ -3,6 +3,7 @@
 #include <Eigen/LU>
 
 using namespace torch::indexing;
+typedef std::pair<int, float> pair;
 
 void raySampler(int H0, int H1, int W0, int W1, int fx, int fy, int cx, int cy, cv::Mat rgb_, cv::Mat depth_, Eigen::Matrix4f c2w_, torch::Tensor& rays_d, torch::Tensor& rays_o, torch::Tensor& gt_color, torch::Tensor& gt_depth)
 {
@@ -52,6 +53,7 @@ void keyframe_selection_overlap(int H0, int H1, int W0, int W1, int fx, int fy, 
 	int n_samples =16;
 	int W =W1;
 	int H = H1;
+	int k_overlap = 0;
 
 	torch::Tensor rays_o, rays_d, gt_color, gt_depth;
 	raySampler(H0, H1, W0, W1, fx, fy, cx, cy, rgb_, depth_, c2w_, rays_d, rays_o, gt_color, gt_depth);
@@ -73,7 +75,9 @@ void keyframe_selection_overlap(int H0, int H1, int W0, int W1, int fx, int fy, 
 		0, fy, cy,
 		0, 0, 1;
 	auto K = torch::from_blob(k.data(), {3, 3});
+	std::map<int, float> list_keyframe;
 
+	float best_p = 0;
 	for (int i = 0; i < keyframe_vec.size(); ++i)
 	{
 		Eigen::Matrix4f c2w = keyframe_vec[i];
@@ -94,6 +98,24 @@ void keyframe_selection_overlap(int H0, int H1, int W0, int W1, int fx, int fy, 
 		mask = mask & (z.index({Slice(None), Slice(None), 0}) < 0);
 		mask = mask.reshape(-1);
 		auto percentage_inside = mask.sum()/uv.sizes()[0];
+		float p_calc = percentage_inside.item<float>();	
+		if (p_calc > 0)
+			list_keyframe.insert({i, p_calc});
 	}
+	//sort the list_keyframe acc to perctage_inside
+	std::vector<pair> sorted_kf;
+    std::copy(list_keyframe.begin(),
+            list_keyframe.end(),
+            std::back_inserter<std::vector<pair>>(sorted_kf));
+    std::sort(sorted_kf.begin(), sorted_kf.end(),
+            [](const pair &l, const pair &r)
+            {
+              return l.second > r.second;
+            });
+    std::vector<int> selected_kf;
+    for (auto ele : sorted_kf)
+    	selected_kf.push_back(ele.first);
 
+    if ((selected_kf.size()-k_overlap) > 0)
+    	selected_kf.assign(selected_kf.begin(), selected_kf.begin()+k_overlap);
 }
