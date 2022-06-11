@@ -5,7 +5,7 @@
 using namespace torch::indexing;
 typedef std::pair<int, float> pair;
 
-void raySampler(int H0, int H1, int W0, int W1, int fx, int fy, int cx, int cy, cv::Mat rgb_, cv::Mat depth_, Eigen::Matrix4f c2w_, torch::Tensor& rays_d, torch::Tensor& rays_o, torch::Tensor& gt_color, torch::Tensor& gt_depth)
+inline void raySampler(int H0, int H1, int W0, int W1, int fx, int fy, int cx, int cy, cv::Mat rgb_, cv::Mat depth_, Eigen::Matrix4f c2w_, torch::Tensor& rays_d, torch::Tensor& rays_o, torch::Tensor& gt_color, torch::Tensor& gt_depth)
 {
 
 	int n = 100;
@@ -47,7 +47,7 @@ void raySampler(int H0, int H1, int W0, int W1, int fx, int fy, int cx, int cy, 
 }
 
 
-void keyframe_selection_overlap(int H0, int H1, int W0, int W1, int fx, int fy, int cx, int cy, cv::Mat rgb_, cv::Mat depth_, Eigen::Matrix4f c2w_)
+inline void keyframe_selection_overlap(int H0, int H1, int W0, int W1, int fx, int fy, int cx, int cy, cv::Mat rgb_, cv::Mat depth_, Eigen::Matrix4f c2w_)
 {
 
 	int n_samples =16;

@@ -1,20 +1,14 @@
-#include <iostream>
-#include <memory>
-#include "inputs/CoFusionReader.h"
-#include "torchlib/utils.h"
+//cjpurackal
+//June 11 '22, 16:54:00
+#include "Mapper.h"
+#include "Tracker.h"
+#include "models/MLP.h"
 
-int main(int argc, const char* argv[]) 
+int main(int argc, const char* argv[])
 {
+	Mapper mapr;
+	Tracker tracker;
+	// mapr.run(argv[1]);
 
-  CoFusionReader cfreader(argv[1]);
-
-  cfreader.getNext();
-
-  keyframe_selection_overlap(0, 480, 0, 640,  360, 360, 320, 240, cfreader.rgb, cfreader.depth, cfreader.c2w);
-
-  // while (cfreader.hasMore())
-  // {
-  //   cfreader.getNext();
-  // }
-  return 0;
+	return 0;
 }
