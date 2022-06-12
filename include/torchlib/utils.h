@@ -119,3 +119,17 @@ inline void keyframe_selection_overlap(int H0, int H1, int W0, int W1, int fx, i
     if ((selected_kf.size()-k_overlap) > 0)
     	selected_kf.assign(selected_kf.begin(), selected_kf.begin()+k_overlap);
 }
+
+
+inline void normalize_3d_coordinate(torch::Tensor& p, torch::Tensor bound)
+{
+    p = p.reshape({-1, 3});
+    p.index({Slice(None), 0}) = ((p.index({Slice(None, 0)}) - bound.index({0,0})) / (bound.index({0,1}) - bound.index({0, 0})))*2-1; 
+    p.index({Slice(None), 1}) = ((p.index({Slice(None, 1)}) - bound.index({1,0})) / (bound.index({1,1}) - bound.index({1, 0})))*2-1; 
+    p.index({Slice(None), 2}) = ((p.index({Slice(None, 2)}) - bound.index({2,0})) / (bound.index({2,1}) - bound.index({2, 0})))*2-1; 
+
+}
+    // p[:, 0] = ((p[:, 0]-bound[0, 0])/(bound[0, 1]-bound[0, 0]))*2-1.0
+    // p[:, 1] = ((p[:, 1]-bound[1, 0])/(bound[1, 1]-bound[1, 0]))*2-1.0
+    // p[:, 2] = ((p[:, 2]-bound[2, 0])/(bound[2, 1]-bound[2, 0]))*2-1.0
+    // return p
