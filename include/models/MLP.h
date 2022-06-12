@@ -13,7 +13,7 @@ struct MLP: torch::nn::Module
 	n_blocks(n_blocks),
 	skips(skips)
 	{
-		//assuming number of blocks to be 5 for NICE
+		//assuming number of blocks to be 5 for NICE and embedder to be fourier
 		fc = torch::nn::ModuleList(
 			torch::nn::Linear(c_dim,hidden_size),
 			torch::nn::Linear(c_dim,hidden_size),
@@ -21,12 +21,49 @@ struct MLP: torch::nn::Module
 			torch::nn::Linear(c_dim,hidden_size),
 			torch::nn::Linear(c_dim,hidden_size)
 			);
-		embedder = GaussianFFT(dim,93,25);
-		// pts_linear = torch::nn::ModuleList(
-		// 	torch::nn::Linear()
-		// 	);
+		embedding_size = 93;
+		embedder = GaussianFFT(dim,embedding_size,25);
+
+		torch::nn::Linear pts_linear_0(embedding_size, hidden_size);
+		pts_linear_0 = reset_parameters_dense(pts_linear_0, "relu");
+		torch::nn::Linear pts_linear_1(hidden_size, hidden_size);
+		pts_linear_1 = reset_parameters_dense(pts_linear_1, "relu");
+		torch::nn::Linear pts_linear_2(hidden_size, hidden_size);
+		pts_linear_2 = reset_parameters_dense(pts_linear_2, "relu");
+		//skip connection
+		torch::nn::Linear pts_linear_3(hidden_size+embedding_size, hidden_size);
+		pts_linear_3 = reset_parameters_dense(pts_linear_3, "relu");		
+		torch::nn::Linear pts_linear_4(hidden_size, hidden_size);
+		pts_linear_4 = reset_parameters_dense(pts_linear_4, "relu");
+		pts_linear = torch::nn::ModuleList(
+			pts_linear_0,
+			pts_linear_1,
+			pts_linear_2,
+			pts_linear_3,
+			pts_linear_4
+			);
+
+		torch::nn::Linear output_linear(hidden_size,4); //tmp initialization
+
+		if (color)
+			output_linear = reset_parameters_dense(torch::nn::Linear(hidden_size,4), "linear");
+		else
+			output_linear = reset_parameters_dense(torch::nn::Linear(hidden_size,1), "linear");
+
 
 	}
+
+	torch::nn::Linear reset_parameters_dense(torch::nn::Linear layer, std::string activation) 
+	{
+		torch::NoGradGuard noGrad;
+		if (activation == "relu")
+			torch::nn::init::xavier_uniform_(layer->weight, torch::nn::init::calculate_gain(torch::enumtype::kReLU()));
+		else if (activation == "linear")
+			torch::nn::init::xavier_uniform_(layer->weight, torch::nn::init::calculate_gain(torch::enumtype::kReLU()));
+		torch::nn::init::zeros_(layer->bias);
+		return layer;
+	}
+
 
 	std::string name;
 	bool color, no_grad_feature, concat_feat;
@@ -35,6 +72,6 @@ struct MLP: torch::nn::Module
 	float grid_len;
 	torch::nn::ModuleList fc, pts_linear;
 	GaussianFFT embedder;
-
+	int embedding_size;
 
 };
