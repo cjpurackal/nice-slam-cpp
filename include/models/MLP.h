@@ -1,5 +1,7 @@
 #include <torch/torch.h>
 #include "models/GaussianFFT.h"
+#include "torchlib/utils.h"
+
 
 struct MLP: torch::nn::Module
 {
@@ -11,7 +13,8 @@ struct MLP: torch::nn::Module
 	grid_len(grid_len),
 	concat_feat(concat_feat),
 	n_blocks(n_blocks),
-	skips(skips)
+	skips(skips),
+	output_linear(register_module("linear", torch::nn::Linear(hidden_size, 4)))
 	{
 		//assuming number of blocks to be 5 for NICE and embedder to be fourier
 		fc = torch::nn::ModuleList(
@@ -43,14 +46,26 @@ struct MLP: torch::nn::Module
 			pts_linear_4
 			);
 
-		torch::nn::Linear output_linear(hidden_size,4); //tmp initialization
-
 		if (color)
 			output_linear = reset_parameters_dense(torch::nn::Linear(hidden_size,4), "linear");
 		else
 			output_linear = reset_parameters_dense(torch::nn::Linear(hidden_size,1), "linear");
 
 
+	}
+
+	torch::Tensor sample_grid_feature(torch::Tensor p, torch::Tensor c)
+	{
+		Eigen::MatrixXf bound(3,2);
+		bound<<-4.5, 3.82,
+			   -1.5, 2.02,
+			   -3, 2.76 ;
+		auto bound_t = torch::from_blob(bound.data(), {3, 2});
+		normalize_3d_coordinate(p, bound_t);
+		auto p_nor = p.unsqueeze(0);
+		auto vgrid = p_nor.index({Slice(None), Slice(None), None, None});
+		F::grid_sample(c, vgrid, F::GridSampleFuncOptions().mode(torch::kBilinear).padding_mode(torch::kBorder).align_corners(true)).squeeze(-1).squeeze(-1);
+		return c;
 	}
 
 	torch::nn::Linear reset_parameters_dense(torch::nn::Linear layer, std::string activation) 
@@ -64,6 +79,31 @@ struct MLP: torch::nn::Module
 		return layer;
 	}
 
+	torch::Tensor forward(torch::Tensor p, std::map<std::string, torch::Tensor> c_grid)
+	{
+		auto c = sample_grid_feature(p, c_grid["grid_"+name]).transpose(1, 2).squeeze(0);
+		if (concat_feat)
+		torch::NoGradGuard noGrad;
+		auto c_middle = sample_grid_feature(p, c_grid["grid_middle"]).transpose(1, 2).squeeze(0);
+		c = torch::cat({c, c_middle}, 1);
+
+		torch::Tensor embedded_pts = embedder.forward(p);
+		auto h = embedded_pts;
+
+		int i = 0;
+		for (const auto &module : *pts_linear) 
+		{
+			h = module->as<torch::nn::Linear>()->forward(embedded_pts);
+			h = F::relu(h);
+			h = h + fc[i]->as<torch::nn::Linear>()->forward(c);
+			if (std::find(skips.begin(), skips.end(), i) != skips.end())
+				h = torch::cat({embedded_pts, h}, -1);
+		}
+		auto out = output_linear(h);
+		if (!color)
+			out = out.squeeze(-1);
+		return out;
+	}
 
 	std::string name;
 	bool color, no_grad_feature, concat_feat;
@@ -71,6 +111,7 @@ struct MLP: torch::nn::Module
 	std::vector<int> skips;
 	float grid_len;
 	torch::nn::ModuleList fc, pts_linear;
+	torch::nn::Linear output_linear;
 	GaussianFFT embedder;
 	int embedding_size;
 
