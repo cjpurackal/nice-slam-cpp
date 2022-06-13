@@ -3,6 +3,7 @@
 #include <Eigen/LU>
 
 using namespace torch::indexing;
+namespace F = torch::nn::functional;
 typedef std::pair<int, float> pair;
 
 inline void raySampler(int H0, int H1, int W0, int W1, int fx, int fy, int cx, int cy, cv::Mat rgb_, cv::Mat depth_, Eigen::Matrix4f c2w_, torch::Tensor& rays_d, torch::Tensor& rays_o, torch::Tensor& gt_color, torch::Tensor& gt_depth)
@@ -129,7 +130,3 @@ inline void normalize_3d_coordinate(torch::Tensor& p, torch::Tensor bound)
     p.index({Slice(None), 2}) = ((p.index({Slice(None, 2)}) - bound.index({2,0})) / (bound.index({2,1}) - bound.index({2, 0})))*2-1; 
 
 }
-    // p[:, 0] = ((p[:, 0]-bound[0, 0])/(bound[0, 1]-bound[0, 0]))*2-1.0
-    // p[:, 1] = ((p[:, 1]-bound[1, 0])/(bound[1, 1]-bound[1, 0]))*2-1.0
-    // p[:, 2] = ((p[:, 2]-bound[2, 0])/(bound[2, 1]-bound[2, 0]))*2-1.0
-    // return p
