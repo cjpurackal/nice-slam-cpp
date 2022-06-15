@@ -44,6 +44,7 @@ file(GLOB ns src/main.cpp)
 file(GLOB mapper src/Mapper.cpp)
 file(GLOB tracker src/Tracker.cpp)
 file(GLOB inputs src/inputs/*.cpp)
+file(GLOB models src/models/*.cpp)
 
 add_executable(${PROJECT_NAME}
                ${miniz}
@@ -51,6 +52,7 @@ add_executable(${PROJECT_NAME}
                ${mapper}
                ${tracker}
                ${inputs}
+               ${models}
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
