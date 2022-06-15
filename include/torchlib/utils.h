@@ -1,6 +1,8 @@
 #include <torch/torch.h>
 #include <torch/script.h>
 #include <Eigen/LU>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
 using namespace torch::indexing;
 namespace F = torch::nn::functional;
