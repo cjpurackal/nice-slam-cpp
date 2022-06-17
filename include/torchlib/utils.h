@@ -132,3 +132,27 @@ inline void normalize_3d_coordinate(torch::Tensor& p, torch::Tensor bound)
     p.index({Slice(None), 2}) = ((p.index({Slice(None, 2)}) - bound.index({2,0})) / (bound.index({2,1}) - bound.index({2, 0})))*2-1; 
 
 }
+
+inline void raw2outputs_nerf_colo(torch::Tensor raw, torch::Tensor z_vals, bool occupancy, torch::Tensor rays_d, torch::Tensor& rgb_map, torch::Tensor& depth_map, torch::Tensor& depth_var, torch::Tensor& weights)
+{
+	auto dists = z_vals.index({"...", Slice(1, None)}) - z_vals.index({"...", Slice(-1, None)});
+	dists = torch::cat({dists, torch::tensor({1e10}).expand(dists.index({"...", Slice(None, 1)}).sizes())}, -1);
+	dists = dists * torch::norm(rays_d.index({"...", None, Slice(None)}), -1);
+	auto rgb = raw.index({"...", Slice(None, -1)});
+	//assuming occupancy is false
+	auto alpha = 1 - torch::exp(-F::relu(raw.index({"...", -1}))*dists);
+
+	weights = alpha * torch::cumprod(
+										torch::cat({
+											torch::ones({alpha.sizes()[0], 1})
+											,1-alpha + 1e-10
+										},-1)
+									, -1).index({Slice(None), Slice(None, -1)}); 
+
+	rgb_map = torch::sum(weights.index({"...", Slice(None)}) * rgb, -2);
+	depth_map = torch::sum(weights * z_vals, -1);
+	auto tmp = (z_vals - depth_map.unsqueeze(-1));
+	depth_var = torch::sum(weights*tmp*tmp, 1);
+}
+
+
