@@ -40,17 +40,17 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR})
 
 file(GLOB miniz ${CMAKE_CURRENT_SOURCE_DIR}/deps/tinyexr/miniz.c)
-file(GLOB ns src/main.cpp)
-file(GLOB mapper src/Mapper.cpp)
-file(GLOB tracker src/Tracker.cpp)
+file(GLOB src src/*.cpp)
+# file(GLOB mapper src/Mapper.cpp)
+# file(GLOB tracker src/Tracker.cpp)
 file(GLOB inputs src/inputs/*.cpp)
 file(GLOB models src/models/*.cpp)
 
 add_executable(${PROJECT_NAME}
                ${miniz}
-               ${ns}
-               ${mapper}
-               ${tracker}
+               ${src}
+               # ${mapper}
+               # ${tracker}
                ${inputs}
                ${models}
 )
