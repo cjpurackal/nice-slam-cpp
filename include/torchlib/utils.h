@@ -1,5 +1,7 @@
 #include <torch/torch.h>
 #include <torch/script.h>
+#include <Eigen/Core>
+#include <Eigen/Geometry>
 #include <Eigen/LU>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -193,7 +195,23 @@ inline torch::Tensor get_camera_from_tensor(torch::Tensor inputs)
 	return RT;
 }
 
-// inline torch:::Tensor get_tensor_from_camera(torch::Tensor RT)
-// {
+inline torch::Tensor get_tensor_from_camera(torch::Tensor RT, bool Tquad)
+{
 
-// }
+	typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXf_rm; // same as MatrixXf, but with row-major memory layout
+    auto R = RT.index({Slice(None,3), Slice(None,3)});
+    auto T = RT.index({Slice(None,3), 3});
+    R.data<float>();
+    Eigen::Map<MatrixXf_rm> rot(R.data_ptr<float>(), R.size(0), R.size(1));
+    Eigen::Matrix<float, 3, 3, Eigen::RowMajor> rot_ = Eigen::Matrix3f::Identity(3,3);
+    Eigen::Quaternionf quad(rot_);
+    torch::Tensor quad_t = torch::tensor({quad.x(), quad.y(), quad.z(), quad.w()});
+    torch::Tensor tensor;
+    
+    if (Tquad)
+    	tensor = torch::cat({T, quad_t}, 0);
+    else
+    	tensor = torch::cat({quad_t, T}, 0);
+
+    return tensor;
+}
