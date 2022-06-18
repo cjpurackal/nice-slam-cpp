@@ -133,7 +133,7 @@ inline void normalize_3d_coordinate(torch::Tensor& p, torch::Tensor bound)
 
 }
 
-inline void raw2outputs_nerf_colo(torch::Tensor raw, torch::Tensor z_vals, bool occupancy, torch::Tensor rays_d, torch::Tensor& rgb_map, torch::Tensor& depth_map, torch::Tensor& depth_var, torch::Tensor& weights)
+inline void raw2outputs_nerf_color(torch::Tensor raw, torch::Tensor z_vals, bool occupancy, torch::Tensor rays_d, torch::Tensor& rgb_map, torch::Tensor& depth_map, torch::Tensor& depth_var, torch::Tensor& weights)
 {
 	auto dists = z_vals.index({"...", Slice(1, None)}) - z_vals.index({"...", Slice(-1, None)});
 	dists = torch::cat({dists, torch::tensor({1e10}).expand(dists.index({"...", Slice(None, 1)}).sizes())}, -1);
@@ -155,4 +155,45 @@ inline void raw2outputs_nerf_colo(torch::Tensor raw, torch::Tensor z_vals, bool 
 	depth_var = torch::sum(weights*tmp*tmp, 1);
 }
 
+inline torch::Tensor quad2rotation(torch::Tensor quad)
+{
+	int bs = quad.sizes()[0];
+	auto qr = quad.index({Slice(None), 0});
+	auto qi = quad.index({Slice(None), 1});
+	auto qj = quad.index({Slice(None), 2});
+	auto qk = quad.index({Slice(None), 3});
+	auto two_s = 2/(quad*quad).sum(-1);
+	auto rot_mat = torch::zeros({bs, 3, 3});
+	rot_mat.index({Slice(None), 0, 0}) = 1 - two_s * (qj.pow(2) + qk.pow(2));
+	rot_mat.index({Slice(None), 0, 1}) = two_s * (qi * qj - qk * qr);
+	rot_mat.index({Slice(None), 0, 2}) = two_s * (qi * qk + qj * qr);
+	rot_mat.index({Slice(None), 1, 0}) = two_s * (qi * qj + qk * qr);
+	rot_mat.index({Slice(None), 1, 1}) = 1 - two_s * (qi.pow(2) + qk.pow(2));
+	rot_mat.index({Slice(None), 1, 2}) = two_s * (qj * qk - qi * qr);
+	rot_mat.index({Slice(None), 2, 0}) = two_s * (qi * qk - qj * qr);
+	rot_mat.index({Slice(None), 2, 1}) = two_s * (qj * qk + qi * qr);
+	rot_mat.index({Slice(None), 2, 2}) = 1 - two_s * (qi.pow(2) + qj.pow(2));
 
+	return rot_mat;
+
+}
+
+
+inline torch::Tensor get_camera_from_tensor(torch::Tensor inputs)
+{
+	int n = inputs.sizes().size();
+	if (n == 1)
+		inputs = inputs.unsqueeze(0);
+	auto quad = inputs.index({Slice(None), Slice(None, 4)});
+	auto T = inputs.index({Slice(None), Slice(4, None)});	
+	auto R = quad2rotation(quad);
+	auto RT = torch::cat({R, T.index({Slice(None), Slice(None), None})}, 2);
+	if (n == 1)
+		RT = RT[0]; //not sure if this works
+	return RT;
+}
+
+// inline torch:::Tensor get_tensor_from_camera(torch::Tensor RT)
+// {
+
+// }
