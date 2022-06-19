@@ -7,7 +7,6 @@ RUN apt-key del 7fa2af80
 RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
 RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/7fa2af80.pub
 
-
 # Tools I find useful during development
 RUN apt-get update  \
  && apt-get install -y  \
@@ -96,13 +95,13 @@ RUN mkdir ~/deps \
 && make -j8 \
 && sudo make install 
 
-
 RUN cd ~/deps/ \
-&& wget https://hyperrealm.github.io/libconfig/dist/libconfig-1.7.3.tar.gz \
-&& tar -xvf libconfig-1.7.3.tar.gz \
-&& cd libconfig-1.7.3 \
-&& ./configure \
-&& sudo make install 
+&& git clone https://github.com/jbeder/yaml-cpp.git \
+&& cd yaml-cpp \
+&& mkdir build \
+&& cd build \
+&& cmake .. \
+&& sudo make install
 
 RUN cd ~/deps/ \
 && wget https://github.com/sharkdp/fd/releases/download/v8.3.2/fd-musl_8.3.2_amd64.deb \
