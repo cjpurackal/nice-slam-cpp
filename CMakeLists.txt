@@ -36,6 +36,10 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
+#yaml-cpp 
+find_package(yaml-cpp)
+include_directories(${YAML_CPP_INCLUDE_DIR})
+
 # project-wide paths
 include_directories(${PROJECT_SOURCE_DIR})
 
@@ -66,6 +70,7 @@ target_link_libraries(${PROJECT_NAME}
     ${Eigen_LIBRARIES}
     ${OpenCV_LIBRARIES}
     ${TORCH_LIBRARIES}
+    ${YAML_CPP_LIBRARIES}
     pthread
     config++
 	)
