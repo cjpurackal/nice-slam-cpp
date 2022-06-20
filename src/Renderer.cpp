@@ -127,11 +127,6 @@ void Renderer::render_batch_ray(std::map<std::string, torch::Tensor> c, NICE dec
 	auto pointsf = pts.reshape({-1,3});
 	auto raw = eval_points(pointsf, decoders, c, stage);
 	raw = raw.reshape({n_rays, n_samples+n_sufrace, -1});
-	// raw2outputs_nerf_colo(raw, z_vals, false, rays_d, rgb_map, depth_map, depth_var, weights);
-
-	// if N_importance > 0:  this block is undone, assuming it isn't needed
-
-       //  depth, uncertainty, color, weights = raw2outputs_nerf_color(
-       //      raw, z_vals, rays_d, occupancy=self.occupancy, device=device)
+	raw2outputs_nerf_color(raw, z_vals, false, rays_d, rgb_map, depth_map, depth_var, weights);
 
     }
