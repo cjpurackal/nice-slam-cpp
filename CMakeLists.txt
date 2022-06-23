@@ -72,6 +72,5 @@ target_link_libraries(${PROJECT_NAME}
     ${TORCH_LIBRARIES}
     ${YAML_CPP_LIBRARIES}
     pthread
-    config++
 	)
 
