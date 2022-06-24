@@ -12,3 +12,6 @@ sudo docker build --build-arg user_id=99 -t nscpp:dev .
 ```
 ./run_docker nscpp:dev /path/to/nice-slam-cpp
 ```
+
+## Reference
+https://github.com/cvg/nice-slam
