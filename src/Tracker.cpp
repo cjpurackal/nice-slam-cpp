@@ -94,6 +94,23 @@ void Tracker::update_para_from_mapping()
 void Tracker::run(CoFusionReader cfreader)
 {
 
+	while (cfreader.hasMore())
+	{
+		auto gt_color = cfreader.rgb;
+		auto depth = cfreader.depth; 
+		auto c2w = cfreader.c2w;
+		auto c2w_t = torch::from_blob(c2w.data(), {4, 4});
+
+		update_para_from_mapping();
+
+		if (idx == 0)
+		{
+
+			auto gt_camera_tensor = get_tensor_from_camera(c2w_t, false);
+		}
+
+
+	}
 
 }
 
