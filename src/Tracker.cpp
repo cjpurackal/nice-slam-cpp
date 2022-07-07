@@ -10,21 +10,24 @@ renderer()
 	// coarse = false;
 	// occupancy = false;
 	// sync_method = "strict";
-
 	// idx = 0;
 	mapping_idx = 0;
 	handle_dynamic = cf_config["tracking"]["handle_dynamic"].as<bool>();
 	use_color_in_tracking = cf_config["tracking"]["use_color_in_tracking"].as<bool>();
 	w_color_loss =  cf_config["tracking"]["w_color_loss"].as<float>();
-	Eigen::MatrixXf bound_;
+	lr =  cf_config["tracking"]["lr"].as<float>();
+	num_cam_iters =  cf_config["tracking"]["iters"].as<int>();
+	tracking_pixels = cf_config["tracking"]["pixels"].as<int>();
+	Eigen::MatrixXf bound_(3,2);
 	bound_<< -4.5, 3.82,
 		-1.5, 2.02,
 		-3, 2.76 ;
 	bound = torch::from_blob(bound_.data(), {3, 2});
 	H=0;
 	W=0;
-
+	current_min_loss = 10000000000;
 }
+
 Tracker::~Tracker()
 {
 
@@ -91,24 +94,33 @@ void Tracker::update_para_from_mapping()
 	}
 }
 
-void Tracker::run(CoFusionReader cfreader)
+void Tracker::run(CoFusionReader cfreader, NICE decoders)
 {
 
-	while (cfreader.hasMore())
+	/*while*/if(cfreader.hasMore())
 	{
 		auto gt_color = cfreader.rgb;
-		auto depth = cfreader.depth; 
+		auto gt_depth = cfreader.depth; 
+		auto gt_color_t = torch::from_blob(gt_color.data, {cfreader.width, cfreader.height, 3});
+		auto gt_depth_t = torch::from_blob(gt_depth.data, {cfreader.width, cfreader.height});
+
+
 		auto c2w = cfreader.c2w;
-		auto c2w_t = torch::from_blob(c2w.data(), {4, 4});
+		auto gt_c2w_t = torch::from_blob(c2w.data(), {4, 4});
+		torch::Tensor camera_tensor, gt_camera_tensor;
+		gt_camera_tensor = get_tensor_from_camera(gt_c2w_t, false);
+		camera_tensor = get_tensor_from_camera(gt_c2w_t, false);
 
-		update_para_from_mapping();
 
-		if (idx == 0)
-		{
+		std::vector<torch::Tensor> cam_para_list{camera_tensor};
+		torch::optim::Adam optimizer(cam_para_list, torch::optim::AdamOptions(1e-2));
 
-			auto gt_camera_tensor = get_tensor_from_camera(c2w_t, false);
-		}
+   		auto initial_loss_camera_tensor = torch::abs(gt_camera_tensor-camera_tensor);
 
+   		for (int i = 0; i < num_cam_iters; ++i)
+   		{
+   			// optimize_cam_in_batch(camera_tensor, gt_color_t, gt_depth_t, tracking_pixels ,optimizer, decoders);
+   		}
 
 	}
 

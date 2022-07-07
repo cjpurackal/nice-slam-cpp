@@ -10,7 +10,7 @@ class Tracker
 	public:
 		Tracker(YAML::Node cf_config);
 		virtual ~Tracker();
-		void run(CoFusionReader cfreader);
+		void run(CoFusionReader cfreaderm , NICE decoders);
 		torch::Tensor optimize_cam_in_batch(torch::Tensor cam_tensor, torch::Tensor gt_color, torch::Tensor gt_depth, int batch_size ,torch::optim::Adam optimizer, NICE decoders);
 		void update_para_from_mapping();
 	private:
@@ -24,5 +24,10 @@ class Tracker
 		float w_color_loss;
 		int mapping_idx, prev_mapping_idx;
 		std::map<std::string, torch::Tensor> shared_c;
+		float lr;
+		std::vector<torch::Tensor> estimate_c2w; 
+		float current_min_loss;
+		int num_cam_iters, tracking_pixels;
+
 
 };
