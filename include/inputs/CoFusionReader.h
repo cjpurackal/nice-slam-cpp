@@ -30,5 +30,6 @@ class CoFusionReader
         int width, height;
         int fptr;
         float png_depth_scale;
+        int n_imgs;
 };
 #endif /* COFUSIONREADER_H_ */

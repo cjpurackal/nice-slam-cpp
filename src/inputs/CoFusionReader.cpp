@@ -3,6 +3,7 @@
 #define TINYEXR_IMPLEMENTATION
 #include "inputs/CoFusionReader.h"
 
+
 CoFusionReader::CoFusionReader(std::string inp)
 {
 	fptr = 1;
@@ -10,8 +11,8 @@ CoFusionReader::CoFusionReader(std::string inp)
 	width=640;
 	height=480;
 	png_depth_scale = 6553.5;
-
 	c2w = Eigen::MatrixXf::Identity(4,4);
+	n_imgs = 849;
 }
 
 CoFusionReader::~CoFusionReader()
@@ -21,7 +22,7 @@ CoFusionReader::~CoFusionReader()
 
 bool CoFusionReader::hasMore()
 {
-	if (fptr > 849)
+	if (fptr > n_imgs)
 		return false;
 	else
 		return true;
