@@ -3,7 +3,7 @@
 #include "Tracker.h"
 
 
-Tracker::Tracker(YAML::Node cf_config):
+Tracker::Tracker(YAML::Node ns_config, YAML::Node cf_config):
 renderer()
 {
 	// scale = 1;
@@ -12,19 +12,27 @@ renderer()
 	// sync_method = "strict";
 	// idx = 0;
 	mapping_idx = 0;
-	handle_dynamic = cf_config["tracking"]["handle_dynamic"].as<bool>();
-	use_color_in_tracking = cf_config["tracking"]["use_color_in_tracking"].as<bool>();
-	w_color_loss =  cf_config["tracking"]["w_color_loss"].as<float>();
-	lr =  cf_config["tracking"]["lr"].as<float>();
-	num_cam_iters =  cf_config["tracking"]["iters"].as<int>();
-	tracking_pixels = cf_config["tracking"]["pixels"].as<int>();
+	handle_dynamic = ns_config["tracking"]["handle_dynamic"].as<bool>();
+	use_color_in_tracking = ns_config["tracking"]["use_color_in_tracking"].as<bool>();
+	w_color_loss =  ns_config["tracking"]["w_color_loss"].as<float>();
+	lr =  ns_config["tracking"]["lr"].as<float>();
+	num_cam_iters =  ns_config["tracking"]["iters"].as<int>();
+	tracking_pixels = ns_config["tracking"]["pixels"].as<int>();
+	ignore_edge_w = ns_config["tracking"]["ignore_edge_W"].as<int>();
+	ignore_edge_h = ns_config["tracking"]["ignore_edge_H"].as<int>();
+	
 	Eigen::MatrixXf bound_(3,2);
 	bound_<< -4.5, 3.82,
 		-1.5, 2.02,
 		-3, 2.76 ;
 	bound = torch::from_blob(bound_.data(), {3, 2});
-	H=0;
-	W=0;
+	H = cf_config["cam"]["H"].as<int>();
+	W = cf_config["cam"]["W"].as<int>();
+	fx = cf_config["cam"]["fx"].as<float>();
+	fy = cf_config["cam"]["fy"].as<float>();
+	cx = cf_config["cam"]["cx"].as<float>();
+	cy = cf_config["cam"]["cy"].as<float>();
+
 	current_min_loss = 10000000000;
 }
 
@@ -33,51 +41,53 @@ Tracker::~Tracker()
 
 }
 
-torch::Tensor Tracker::optimize_cam_in_batch(torch::Tensor cam_tensor, torch::Tensor gt_color, torch::Tensor gt_depth, int batch_size ,torch::optim::Adam optimizer, NICE decoders)
+torch::Tensor Tracker::optimize_cam_in_batch(torch::Tensor cam_tensor, torch::Tensor gt_color, torch::Tensor gt_depth, int batch_size ,torch::optim::Adam& optimizer, NICE decoders)
 {
 	optimizer.zero_grad();
 	auto c2w = get_camera_from_tensor(cam_tensor);
 	torch::Tensor batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color;
-	get_samples(ignore_edge_h, H-ignore_edge_h, ignore_edge_w, W-ignore_edge_w, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, gt_color, batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color);
-	torch::NoGradGuard noGrad;
-	auto det_rays_o = batch_rays_o.unsqueeze(-1);
-	auto det_rays_d = batch_rays_d.unsqueeze(-1);
-
-	auto t_ = (bound.unsqueeze(0)-det_rays_o)/det_rays_d;
-	auto t = std::get<0>(torch::min(std::get<0>(torch::max(t_, 2)),1));
-	auto inside_mask = t>=batch_gt_depth;
-	batch_rays_d = batch_rays_d.index({inside_mask});
-	batch_rays_o = batch_rays_o.index({inside_mask});
-    batch_gt_depth = batch_gt_depth.index({inside_mask});
-    batch_gt_color = batch_gt_color.index({inside_mask});
+	// std::cout<<"ignore_edge_h : "<<ignore_edge_h<<std::endl<<" ignore_edge_w : "<<ignore_edge_w<<std::endl<<"W :"<<W<<std::endl<<"H : "<<H<<std::endl<<"Fx :"<<fx<<std::endl<<"Fy"<<fy<<std::endl<<"Cx"<<cx<<std::endl<<"Cy :"<<cy<<std::endl;
 	
-	torch::Tensor color, depth, uncertainity, weights;
-	renderer.render_batch_ray(c, decoders, batch_rays_d, batch_rays_o, "color", batch_gt_depth, color, depth, uncertainity, weights);
-	torch::Tensor mask;
+	get_samples(ignore_edge_h, H-ignore_edge_h, ignore_edge_w, W-ignore_edge_w, batch_size, H, W, fx, fy, cx, cy, c2w, gt_depth, gt_color, batch_rays_o, batch_rays_d, batch_gt_depth, batch_gt_color);
+	// torch::NoGradGuard noGrad;
+	// auto det_rays_o = batch_rays_o.unsqueeze(-1);
+	// auto det_rays_d = batch_rays_d.unsqueeze(-1);
 
-	if (handle_dynamic)
-	{
-		auto tmp = torch::abs(batch_gt_depth-depth)/torch::sqrt(uncertainity+1e-10);
-		mask = (tmp < 10*tmp.median()) & (batch_gt_depth > 0);
-	}
-	else
-		mask = batch_gt_depth > 0;
+	// auto t_ = (bound.unsqueeze(0)-det_rays_o)/det_rays_d;
+	// auto t = std::get<0>(torch::min(std::get<0>(torch::max(t_, 2)),1));
+	// auto inside_mask = t>=batch_gt_depth;
+	// batch_rays_d = batch_rays_d.index({inside_mask});
+	// batch_rays_o = batch_rays_o.index({inside_mask});
+ //    batch_gt_depth = batch_gt_depth.index({inside_mask});
+ //    batch_gt_color = batch_gt_color.index({inside_mask});
+	
+	// torch::Tensor color, depth, uncertainity, weights;
+	// renderer.render_batch_ray(c, decoders, batch_rays_d, batch_rays_o, "color", batch_gt_depth, color, depth, uncertainity, weights);
+	// torch::Tensor mask;
 
-	auto loss = (torch::abs(batch_gt_depth-depth))/torch::sqrt(uncertainity+1e-10);
-	loss = loss.index({mask}).sum();
+	// if (handle_dynamic)
+	// {
+	// 	auto tmp = torch::abs(batch_gt_depth-depth)/torch::sqrt(uncertainity+1e-10);
+	// 	mask = (tmp < 10*tmp.median()) & (batch_gt_depth > 0);
+	// }
+	// else
+	// 	mask = batch_gt_depth > 0;
 
-	if (use_color_in_tracking)
-	{
-		auto color_loss = torch::abs(batch_gt_color - color);
-		color_loss = color_loss.index({mask}).sum();
-		loss = loss + w_color_loss*color_loss;
-	}
+	// auto loss = (torch::abs(batch_gt_depth-depth))/torch::sqrt(uncertainity+1e-10);
+	// loss = loss.index({mask}).sum();
 
-	loss.backward();
-	optimizer.step();
-	optimizer.zero_grad();
+	// if (use_color_in_tracking)
+	// {
+	// 	auto color_loss = torch::abs(batch_gt_color - color);
+	// 	color_loss = color_loss.index({mask}).sum();
+	// 	loss = loss + w_color_loss*color_loss;
+	// }
 
-	return loss;
+	// loss.backward();
+	// optimizer.step();
+	// optimizer.zero_grad();
+
+	// return loss;
 
 }
 
@@ -119,7 +129,7 @@ void Tracker::run(CoFusionReader cfreader, NICE decoders)
 
    		for (int i = 0; i < num_cam_iters; ++i)
    		{
-   			// optimize_cam_in_batch(camera_tensor, gt_color_t, gt_depth_t, tracking_pixels ,optimizer, decoders);
+   			optimize_cam_in_batch(camera_tensor, gt_color_t, gt_depth_t, tracking_pixels , optimizer, decoders);
    		}
 
 	}
