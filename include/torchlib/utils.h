@@ -10,8 +10,12 @@ using namespace torch::indexing;
 namespace F = torch::nn::functional;
 typedef std::pair<int, float> pair;
 
-inline void raySampler(int H0, int H1, int W0, int W1, int n, int fx, int fy, int cx, int cy, torch::Tensor rgb, torch::Tensor depth, torch::Tensor c2w, torch::Tensor& rays_d, torch::Tensor& rays_o, torch::Tensor& gt_color, torch::Tensor& gt_depth)
+inline void raySampler(int H0, int H1, int W0, int W1, int n, int fx, int fy, int cx, int cy, torch::Tensor depth, torch::Tensor color, torch::Tensor c2w, torch::Tensor& rays_d, torch::Tensor& rays_o, torch::Tensor& gt_color, torch::Tensor& gt_depth)
 {
+
+	depth = depth.index({Slice(H0,H1), Slice(W0,W1)});
+	color = color.index({Slice(H0,H1), Slice(W0,W1)});
+
 
 	std::vector<torch::Tensor> tl;
 	tl.push_back(torch::linspace(W0,W1-1,W1-W0,torch::TensorOptions().dtype(torch::kF32)/*.device(torch::kCUDA, 0)*/));
@@ -20,9 +24,12 @@ inline void raySampler(int H0, int H1, int W0, int W1, int n, int fx, int fy, in
 	torch::Tensor i = t[0];
 	torch::Tensor j = t[1];
 
+	i = i.t();
+	j = j.t();
+
 	i = i.reshape(-1);
 	j = j.reshape(-1);
- 
+
 	torch::Tensor ind = torch::randint(i.sizes()[0], {n});
 	ind = ind.clamp(0, i.sizes()[0]);
 	ind = ind.to(torch::kLong);
@@ -30,9 +37,9 @@ inline void raySampler(int H0, int H1, int W0, int W1, int n, int fx, int fy, in
 	j = j.index({ind});
 
 	depth = depth.reshape(-1);
-	rgb = rgb.reshape({-1, 3});
+	color = color.reshape({-1, 3});
 
-	gt_color = rgb.index({ind});
+	gt_color = color.index({ind});
 	gt_depth = depth.index({ind});
 
 	auto i_t = (i-cx)/fx;
@@ -56,7 +63,7 @@ inline void keyframe_selection_overlap(int H0, int H1, int W0, int W1, int n, in
 	int k_overlap = 0;
 
 	torch::Tensor rays_o, rays_d, gt_color, gt_depth;
-	raySampler(H0, H1, W0, W1, n, fx, fy, cx, cy, rgb_, depth_, c2w_, rays_d, rays_o, gt_color, gt_depth);
+	raySampler(H0, H1, W0, W1, n, fx, fy, cx, cy, depth_, rgb_, c2w_, rays_d, rays_o, gt_color, gt_depth);
 
 	gt_depth = gt_depth.reshape({-1, 1});
 	gt_depth = gt_depth.repeat({1,n_samples});
@@ -133,8 +140,7 @@ inline void normalize_3d_coordinate(torch::Tensor& p, torch::Tensor bound)
 inline void get_samples(int H0, int H1, int W0, int W1, int n, int H, int W, int fx, int fy, int cx, int cy, torch::Tensor c2w, torch::Tensor depth, torch::Tensor color, torch::Tensor& rays_d, torch::Tensor& rays_o, torch::Tensor& sample_depth, torch::Tensor& sample_color)
 {
 
-	raySampler(H0, H1, W0, W1, n, fx, fy, cx, cy, color,  depth,  c2w, rays_d, rays_o, sample_color, sample_depth);
-
+	raySampler(H0, H1, W0, W1, n, fx, fy, cx, cy, depth, color, c2w, rays_d, rays_o, sample_color, sample_depth);
 
 }
 

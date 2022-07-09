@@ -58,8 +58,8 @@ torch::Tensor Tracker::optimize_cam_in_batch(torch::Tensor cam_tensor, torch::Te
 	// auto inside_mask = t>=batch_gt_depth;
 	// batch_rays_d = batch_rays_d.index({inside_mask});
 	// batch_rays_o = batch_rays_o.index({inside_mask});
- //    batch_gt_depth = batch_gt_depth.index({inside_mask});
- //    batch_gt_color = batch_gt_color.index({inside_mask});
+	// batch_gt_depth = batch_gt_depth.index({inside_mask});
+	// batch_gt_color = batch_gt_color.index({inside_mask});
 	
 	// torch::Tensor color, depth, uncertainity, weights;
 	// renderer.render_batch_ray(c, decoders, batch_rays_d, batch_rays_o, "color", batch_gt_depth, color, depth, uncertainity, weights);
@@ -109,11 +109,11 @@ void Tracker::run(CoFusionReader cfreader, NICE decoders)
 
 	/*while*/if(cfreader.hasMore())
 	{
+		cfreader.getNext();
 		auto gt_color = cfreader.rgb;
 		auto gt_depth = cfreader.depth; 
-		auto gt_color_t = torch::from_blob(gt_color.data, {cfreader.width, cfreader.height, 3});
-		auto gt_depth_t = torch::from_blob(gt_depth.data, {cfreader.width, cfreader.height});
-
+		auto gt_color_t = torch::from_blob(gt_color.data, {cfreader.height, cfreader.width, 3});
+		auto gt_depth_t = torch::from_blob(gt_depth.data, {cfreader.height, cfreader.width});
 
 		auto c2w = cfreader.c2w;
 		auto gt_c2w_t = torch::from_blob(c2w.data(), {4, 4});
