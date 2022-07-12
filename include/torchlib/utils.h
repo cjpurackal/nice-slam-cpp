@@ -10,12 +10,11 @@ using namespace torch::indexing;
 namespace F = torch::nn::functional;
 typedef std::pair<int, float> pair;
 
-inline void raySampler(int H0, int H1, int W0, int W1, int n, int fx, int fy, int cx, int cy, torch::Tensor depth, torch::Tensor color, torch::Tensor c2w, torch::Tensor& rays_d, torch::Tensor& rays_o, torch::Tensor& gt_color, torch::Tensor& gt_depth)
+inline void raySampler(int H0, int H1, int W0, int W1, int n, int fx, int fy, int cx, int cy, torch::Tensor depth, torch::Tensor color, torch::Tensor c2w, torch::Tensor& rays_o, torch::Tensor& rays_d, torch::Tensor& gt_color, torch::Tensor& gt_depth)
 {
 
 	depth = depth.index({Slice(H0,H1), Slice(W0,W1)});
 	color = color.index({Slice(H0,H1), Slice(W0,W1)});
-
 
 	std::vector<torch::Tensor> tl;
 	tl.push_back(torch::linspace(W0,W1-1,W1-W0,torch::TensorOptions().dtype(torch::kF32)/*.device(torch::kCUDA, 0)*/));
@@ -48,8 +47,10 @@ inline void raySampler(int H0, int H1, int W0, int W1, int n, int fx, int fy, in
 	auto dirs = torch::stack({i_t,j_t,-torch::ones_like(i)}, -1);
 	dirs = dirs.reshape({-1, 1, 3});
 
+
 	rays_d = torch::sum(dirs * c2w.index({Slice(None,3), Slice(None, 3)}), -1);
 	rays_o = c2w.index({Slice(None, 3), -1}).expand(rays_d.sizes());
+
 
 }
 
@@ -137,10 +138,10 @@ inline void normalize_3d_coordinate(torch::Tensor& p, torch::Tensor bound)
 
 }
 
-inline void get_samples(int H0, int H1, int W0, int W1, int n, int H, int W, int fx, int fy, int cx, int cy, torch::Tensor c2w, torch::Tensor depth, torch::Tensor color, torch::Tensor& rays_d, torch::Tensor& rays_o, torch::Tensor& sample_depth, torch::Tensor& sample_color)
+inline void get_samples(int H0, int H1, int W0, int W1, int n, int H, int W, int fx, int fy, int cx, int cy, torch::Tensor c2w, torch::Tensor depth, torch::Tensor color, torch::Tensor& rays_o, torch::Tensor& rays_d, torch::Tensor& sample_depth, torch::Tensor& sample_color)
 {
 
-	raySampler(H0, H1, W0, W1, n, fx, fy, cx, cy, depth, color, c2w, rays_d, rays_o, sample_color, sample_depth);
+	raySampler(H0, H1, W0, W1, n, fx, fy, cx, cy, depth, color, c2w, rays_o, rays_d, sample_color, sample_depth);
 
 }
 

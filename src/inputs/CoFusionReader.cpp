@@ -6,7 +6,7 @@
 
 CoFusionReader::CoFusionReader(std::string inp)
 {
-	fptr = 1;
+	fptr = 3;
 	input_folder = inp;
 	width=640;
 	height=480;
@@ -42,7 +42,9 @@ void CoFusionReader::getNext()
 
 		rgb = cv::imread(rgb_f, cv::IMREAD_UNCHANGED);
 	    rgb.convertTo(rgb, CV_32FC3,  1.0/ 255.0);
-	    depth.convertTo(depth, CV_32FC1,  1.0/ png_depth_scale);
+	    // depth.convertTo(depth, CV_32FC1,  1.0/ png_depth_scale);
+	    depth.convertTo(depth, CV_32FC1);
+
 
 	    fptr++;
 	}

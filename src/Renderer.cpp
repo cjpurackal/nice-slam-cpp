@@ -13,10 +13,7 @@ bound_(3,2)
 
 	scale = 1;
 	occupancy = true;
-	bound_<< -4.5, 3.82,
-			-1.5, 2.02,
-			-3, 2.76 ;
-	bound = torch::from_blob(bound_.data(), {3, 2});
+	bound = torch::tensor({{-4.5, 3.82},{-1.5, 2.02}, {-3.0, 2.76}});
 
 }
 
@@ -83,6 +80,7 @@ void Renderer::render_batch_ray(std::map<std::string, torch::Tensor> c, NICE dec
 		far = torch::clamp(far_bb, torch::tensor({0}), std::get<0>(torch::max(gt_depth*1.2, 0)));
 	else
 		far = far_bb;
+
 	if (N_surface > 0)
 	{
 		auto gt_none_zero_mask = gt_depth > 0;
@@ -93,40 +91,40 @@ void Renderer::render_batch_ray(std::map<std::string, torch::Tensor> c, NICE dec
 		auto z_vals_surface_depth_none_zero = 0.95 * gt_depth_surface * (1-t_vals_surface) + 1.05 * gt_depth_surface * (t_vals_surface);
 		z_vals_surface = torch::zeros({gt_depth.sizes()[0], n_sufrace});
 		gt_none_zero_mask = gt_none_zero_mask.squeeze(-1);
-		z_vals_surface.index({gt_none_zero_mask, Slice(None)}) = z_vals_surface_depth_none_zero;
+		z_vals_surface.index_put_({gt_none_zero_mask, Slice(None)}, z_vals_surface_depth_none_zero);
 		auto near_surface = 0.001;
 		auto far_surface = std::get<0>(torch::max(gt_depth, 0)); //asuming 0 dim
 		auto z_vals_surface_depth_zero = near_surface * (1.-t_vals_surface) + far_surface * (t_vals_surface);
-		auto gt_none_zero_mask_sum = ~gt_none_zero_mask.sum();
-		z_vals_surface_depth_zero = z_vals_surface_depth_zero.unsqueeze(0).tile({gt_none_zero_mask_sum[0].item<int>(), 1});
-		z_vals_surface.index({~gt_none_zero_mask, Slice(None)}) = z_vals_surface_depth_zero;
-
+		// auto gt_none_zero_mask_sum = ~gt_none_zero_mask.sum();
+		auto gt_none_zero_mask_sum = gt_depth.sizes()[0]-gt_none_zero_mask.sum();
+		z_vals_surface_depth_zero = z_vals_surface_depth_zero.unsqueeze(0).tile({gt_none_zero_mask_sum.item<int>(), 1});
+		z_vals_surface.index_put_({~gt_none_zero_mask, Slice(None)}, z_vals_surface_depth_zero); // doubtful to do, double check
 	}
 
-	auto t_vals = torch::linspace(0, 1, n_samples);
+	// auto t_vals = torch::linspace(0, 1, n_samples);
 	
-	torch::Tensor z_vals;
-	if (!lindisp)
-		z_vals = near * (1 - t_vals) + far * (t_vals); 
-	else
-		z_vals = 1./(1./near * (1.-t_vals) + 1./far * (t_vals));
+	// torch::Tensor z_vals;
+	// if (!lindisp)
+	// 	z_vals = near * (1 - t_vals) + far * (t_vals); 
+	// else
+	// 	z_vals = 1./(1./near * (1.-t_vals) + 1./far * (t_vals));
 
-	if (perturb > 0)
-	{
-		auto mids = .5 * (z_vals.index({"...", Slice(1,None)}) +z_vals.index({"...", Slice(None,-1)}));
-		auto upper = torch::cat({mids, z_vals.index({"...", Slice(-1,None)})}, -1);
-		auto lower = torch::cat({z_vals.index({"...", Slice(None,1)}), mids}, -1);
-		auto t_rand = torch::rand(z_vals.sizes());	
-		z_vals = lower + (upper - lower) * t_rand;
+	// if (perturb > 0)
+	// {
+	// 	auto mids = .5 * (z_vals.index({"...", Slice(1,None)}) +z_vals.index({"...", Slice(None,-1)}));
+	// 	auto upper = torch::cat({mids, z_vals.index({"...", Slice(-1,None)})}, -1);
+	// 	auto lower = torch::cat({z_vals.index({"...", Slice(None,1)}), mids}, -1);
+	// 	auto t_rand = torch::rand(z_vals.sizes());	
+	// 	z_vals = lower + (upper - lower) * t_rand;
 
-	}
-	if (N_surface > 0)
-		z_vals = std::get<0>(torch::sort(torch::cat({z_vals, z_vals_surface}, -1), -1));
+	// }
+	// if (N_surface > 0)
+	// 	z_vals = std::get<0>(torch::sort(torch::cat({z_vals, z_vals_surface}, -1), -1));
 
-	auto pts = rays_o.index({"...", None, Slice(None)}) + rays_d.index({"...", None, Slice(None)}) * z_vals.index({"...", Slice(None), None});
-	auto pointsf = pts.reshape({-1,3});
-	auto raw = eval_points(pointsf, decoders, c, stage);
-	raw = raw.reshape({n_rays, n_samples+n_sufrace, -1});
-	raw2outputs_nerf_color(raw, z_vals, false, rays_d, rgb_map, depth_map, depth_var, weights);
+	// auto pts = rays_o.index({"...", None, Slice(None)}) + rays_d.index({"...", None, Slice(None)}) * z_vals.index({"...", Slice(None), None});
+	// auto pointsf = pts.reshape({-1,3});
+	// auto raw = eval_points(pointsf, decoders, c, stage);
+	// raw = raw.reshape({n_rays, n_samples+n_sufrace, -1});
+	// raw2outputs_nerf_color(raw, z_vals, false, rays_d, rgb_map, depth_map, depth_var, weights);
 
     }
