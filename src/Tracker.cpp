@@ -2,7 +2,6 @@
 //June 11 '22, 16:54:00
 #include "Tracker.h"
 
-
 Tracker::Tracker(YAML::Node ns_config, YAML::Node cf_config):
 renderer()
 {
@@ -84,7 +83,6 @@ torch::Tensor Tracker::optimize_cam_in_batch(torch::Tensor cam_tensor, torch::Te
 	// optimizer.zero_grad();
 
 	// return loss;
-
 }
 
 void Tracker::update_para_from_mapping()
@@ -102,7 +100,6 @@ void Tracker::update_para_from_mapping()
 
 void Tracker::run(CoFusionReader cfreader, NICE decoders)
 {
-
 	/*while*/if(cfreader.hasMore())
 	{
 		cfreader.getNext();
@@ -130,8 +127,5 @@ void Tracker::run(CoFusionReader cfreader, NICE decoders)
    			optimize_cam_in_batch(camera_tensor, gt_color_t, gt_depth_t, tracking_pixels , optimizer, decoders);
    			// std::cout<<"loss: "<<loss<<std::endl;
    		}
-
 	}
-
 }
-

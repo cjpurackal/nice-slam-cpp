@@ -28,6 +28,4 @@ class Tracker
 		std::vector<torch::Tensor> estimate_c2w; 
 		float current_min_loss;
 		int num_cam_iters, tracking_pixels;
-
-
 };

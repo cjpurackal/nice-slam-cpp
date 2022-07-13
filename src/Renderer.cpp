@@ -17,7 +17,7 @@ bound_(3,2)
 
 }
 
-torch::Tensor Renderer::eval_points(torch::Tensor p, NICE decoders, std::map<std::string, torch::Tensor> c, std::string stage)
+/*torch::Tensor*/ void Renderer::eval_points(torch::Tensor p, NICE decoders, std::map<std::string, torch::Tensor> c, std::string stage)
 {
 
 	auto p_split = torch::split(p, points_batch_size);
@@ -31,17 +31,17 @@ torch::Tensor Renderer::eval_points(torch::Tensor p, NICE decoders, std::map<std
 		mask = ~mask;
 
 		pi = pi.unsqueeze(0);
-		auto ret = decoders.forward(pi, c, stage);
-		ret = ret.squeeze(0);
+		// auto ret = decoders.forward(pi, c, stage);
+	// 	ret = ret.squeeze(0);
 
-		if ((ret.sizes().size() == 1) && (ret.sizes()[0] == 4))
-			ret = ret.unsqueeze(0);
-		ret.index({mask, 3}) = 100;
-		rets.push_back(ret);
+	// 	if ((ret.sizes().size() == 1) && (ret.sizes()[0] == 4))
+	// 		ret = ret.unsqueeze(0);
+	// 	ret.index({mask, 3}) = 100;
+	// 	rets.push_back(ret);
 
 	}
-	auto ret = torch::cat({rets}, 0);
-	return ret;
+	// auto ret = torch::cat({rets}, 0);
+	// return ret;
 }
 
 void Renderer::render_batch_ray(std::map<std::string, torch::Tensor> c, NICE decoders, torch::Tensor rays_d, torch::Tensor rays_o, std::string stage, torch::Tensor gt_depth, torch::Tensor& rgb_map, torch::Tensor& depth_map, torch::Tensor& depth_var, torch::Tensor& weights)
@@ -101,30 +101,28 @@ void Renderer::render_batch_ray(std::map<std::string, torch::Tensor> c, NICE dec
 		z_vals_surface.index_put_({~gt_none_zero_mask, Slice(None)}, z_vals_surface_depth_zero); // doubtful to do, double check
 	}
 
-	// auto t_vals = torch::linspace(0, 1, n_samples);
+	auto t_vals = torch::linspace(0, 1, n_samples);
 	
-	// torch::Tensor z_vals;
-	// if (!lindisp)
-	// 	z_vals = near * (1 - t_vals) + far * (t_vals); 
-	// else
-	// 	z_vals = 1./(1./near * (1.-t_vals) + 1./far * (t_vals));
+	torch::Tensor z_vals;
+	if (!lindisp)
+		z_vals = near * (1 - t_vals) + far * (t_vals); 
+	else
+		z_vals = 1./(1./near * (1.-t_vals) + 1./far * (t_vals));
 
-	// if (perturb > 0)
-	// {
-	// 	auto mids = .5 * (z_vals.index({"...", Slice(1,None)}) +z_vals.index({"...", Slice(None,-1)}));
-	// 	auto upper = torch::cat({mids, z_vals.index({"...", Slice(-1,None)})}, -1);
-	// 	auto lower = torch::cat({z_vals.index({"...", Slice(None,1)}), mids}, -1);
-	// 	auto t_rand = torch::rand(z_vals.sizes());	
-	// 	z_vals = lower + (upper - lower) * t_rand;
+	if (perturb > 0)
+	{
+		auto mids = .5 * (z_vals.index({"...", Slice(1,None)}) +z_vals.index({"...", Slice(None,-1)}));
+		auto upper = torch::cat({mids, z_vals.index({"...", Slice(-1,None)})}, -1);
+		auto lower = torch::cat({z_vals.index({"...", Slice(None,1)}), mids}, -1);
+		auto t_rand = torch::rand(z_vals.sizes());	
+		z_vals = lower + (upper - lower) * t_rand;
+	}
+	if (N_surface > 0)
+		z_vals = std::get<0>(torch::sort(torch::cat({z_vals, z_vals_surface}, -1), -1));
 
-	// }
-	// if (N_surface > 0)
-	// 	z_vals = std::get<0>(torch::sort(torch::cat({z_vals, z_vals_surface}, -1), -1));
-
-	// auto pts = rays_o.index({"...", None, Slice(None)}) + rays_d.index({"...", None, Slice(None)}) * z_vals.index({"...", Slice(None), None});
-	// auto pointsf = pts.reshape({-1,3});
-	// auto raw = eval_points(pointsf, decoders, c, stage);
+	auto pts = rays_o.index({"...", None, Slice(None)}) + rays_d.index({"...", None, Slice(None)}) * z_vals.index({"...", Slice(None), None});
+	auto pointsf = pts.reshape({-1,3});
+	/* auto raw = */eval_points(pointsf, decoders, c, stage);
 	// raw = raw.reshape({n_rays, n_samples+n_sufrace, -1});
 	// raw2outputs_nerf_color(raw, z_vals, false, rays_d, rgb_map, depth_map, depth_var, weights);
-
-    }
+}

@@ -43,5 +43,4 @@ torch::Tensor NICE::forward(torch::Tensor p, std::map<std::string, torch::Tensor
 		raw.index({"...", -1}) = color_occ;
 		return raw;
 	}
-
 }
