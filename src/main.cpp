@@ -7,6 +7,9 @@ int main(int argc, const char* argv[])
 	YAML::Node ns_config = YAML::LoadFile("/home/developer/nice-slam-cpp/config/nice_slam.yaml");
 	YAML::Node cf_config = YAML::LoadFile("/home/developer/nice-slam-cpp/config/cofusion.yaml");
 
+	torch::DeviceType device_type;
+	device_type = torch::kCUDA;
+	torch::Device device0(device_type, 0);
 
 	Tracker tracker(ns_config, cf_config);
 	CoFusionReader cfreader("/home/developer/nice-slam-cpp/Datasets/CoFusion/room4/");
@@ -34,10 +37,13 @@ int main(int argc, const char* argv[])
 	std::vector<int64_t> coarse_val_shape, middle_val_shape, fine_val_shape, color_val_shape; 
 
 	auto coarse_val_shape_ = xyz_len*coarse_bound_enlarge/coarse_grid_len;
+	coarse_val_shape.push_back(1);
+	coarse_val_shape.push_back(c_dim);
 	coarse_val_shape.push_back(coarse_val_shape_[2].item<int>());
 	coarse_val_shape.push_back(coarse_val_shape_[1].item<int>());
 	coarse_val_shape.push_back(coarse_val_shape_[0].item<int>());
 	auto coarse_val = torch::zeros(coarse_val_shape).normal_(0, 0.01);
+	coarse_val = coarse_val.to(device0);
 	c_dict.insert(std::string("grid_coarse"), coarse_val);
 
 	auto middle_val_shape_ = xyz_len/middle_grid_len;
@@ -47,6 +53,7 @@ int main(int argc, const char* argv[])
 	middle_val_shape.push_back(middle_val_shape_[1].item<int>());
 	middle_val_shape.push_back(middle_val_shape_[0].item<int>());
 	auto middle_val = torch::zeros(middle_val_shape).normal_(0, 0.01);
+	middle_val = middle_val.to(device0);
 	c_dict.insert(std::string("grid_middle"), middle_val);
 
 
@@ -57,6 +64,7 @@ int main(int argc, const char* argv[])
 	fine_val_shape.push_back(fine_val_shape_[1].item<int>());
 	fine_val_shape.push_back(fine_val_shape_[0].item<int>());
 	auto fine_val = torch::zeros(fine_val_shape).normal_(0, 0.0001);
+	fine_val = fine_val.to(device0);
 	c_dict.insert(std::string("grid_fine"), fine_val);
 
 
@@ -67,13 +75,16 @@ int main(int argc, const char* argv[])
 	color_val_shape.push_back(color_val_shape_[1].item<int>());
 	color_val_shape.push_back(color_val_shape_[0].item<int>());
 	auto color_val = torch::zeros(color_val_shape).normal_(0, 0.01);
+	color_val = color_val.to(device0);
 	c_dict.insert(std::string("grid_color"), color_val);
+
 
 
 	NICE decoders(dim, c_dim, hidden_size, coarse_grid_len, middle_grid_len, fine_grid_len, color_grid_len, coarse, pose_emb);
 	torch::jit::script::Module module;
 	module = torch::jit::load(argv[1]);
 	auto p = torch::randn({1,10,3});
+	p = p.to(device0);
 	// std::vector<torch::jit::IValue> arguments{p, c_dict};
 	auto out = module.forward({p, c_dict}).toTensor();
 
