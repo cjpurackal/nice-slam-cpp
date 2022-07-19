@@ -81,13 +81,16 @@ int main(int argc, const char* argv[])
 
 
 	NICE decoders(dim, c_dim, hidden_size, coarse_grid_len, middle_grid_len, fine_grid_len, color_grid_len, coarse, pose_emb);
-	torch::jit::script::Module module;
-	module = torch::jit::load(argv[1]);
+
 	auto p = torch::randn({1,10,3});
 	p = p.to(device0);
-	// std::vector<torch::jit::IValue> arguments{p, c_dict};
-	auto out = module.forward({p, c_dict}).toTensor();
 
+	auto out = decoders.forward(p, c_dict, "coarse");
+	std::cout<<out<<std::endl;
+	out = decoders.forward(p, c_dict, "middle");
+	std::cout<<out<<std::endl;
+	out = decoders.forward(p, c_dict, "fine");
+	std::cout<<out<<std::endl;
 	// tracker.run(cfreader, decoders);
 
 	return 0;

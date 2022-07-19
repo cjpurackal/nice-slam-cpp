@@ -87,15 +87,15 @@ torch::Tensor Tracker::optimize_cam_in_batch(torch::Tensor cam_tensor, torch::Te
 
 void Tracker::update_para_from_mapping()
 {
-	typename std::map<std::string, torch::Tensor>::iterator it = shared_c.begin();
-	if (mapping_idx != prev_mapping_idx)
-	{
-		for(std::pair<std::string, torch::Tensor> element : shared_c )
-		{
-			shared_c[element.first] = element.second; //change shared_c 
-		}
-		prev_mapping_idx = mapping_idx;
-	}
+	// typename std::map<std::string, torch::Tensor>::iterator it = shared_c.begin();
+	// if (mapping_idx != prev_mapping_idx)
+	// {
+	// 	for(std::pair<std::string, torch::Tensor> element : shared_c )
+	// 	{
+	// 		shared_c[element.first] = element.second; //change shared_c 
+	// 	}
+	// 	prev_mapping_idx = mapping_idx;
+	// }
 }
 
 void Tracker::run(CoFusionReader cfreader, NICE decoders)

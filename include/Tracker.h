@@ -19,11 +19,11 @@ class Tracker
 		int idx, ignore_edge_w, ignore_edge_h;
 		torch::Tensor bound;
 		Renderer renderer;
-		std::map<std::string, torch::Tensor> c;
+		c10::Dict<std::string, torch::Tensor> c;
 		bool handle_dynamic, use_color_in_tracking;
 		float w_color_loss;
 		int mapping_idx, prev_mapping_idx;
-		std::map<std::string, torch::Tensor> shared_c;
+		c10::Dict<std::string, torch::Tensor> shared_c;
 		float lr;
 		std::vector<torch::Tensor> estimate_c2w; 
 		float current_min_loss;
