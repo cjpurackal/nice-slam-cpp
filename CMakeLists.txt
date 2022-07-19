@@ -3,6 +3,7 @@ project(nice-slam-cpp)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/")
 set(CMAKE_CXX_STANDARD 14)
+# set(CMAKE_CXX_FLAGS "-D_GLIBCXX_USE_CXX11_ABI=0")
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -43,20 +44,21 @@ include_directories(${YAML_CPP_INCLUDE_DIR})
 # project-wide paths
 include_directories(${PROJECT_SOURCE_DIR})
 
-file(GLOB miniz ${CMAKE_CURRENT_SOURCE_DIR}/deps/tinyexr/miniz.c)
-file(GLOB src src/*.cpp)
-# file(GLOB mapper src/Mapper.cpp)
-# file(GLOB tracker src/Tracker.cpp)
+file(GLOB src src/main.cpp)
+file(GLOB mapper src/Mapper.cpp)
+file(GLOB tracker src/Tracker.cpp)
+file(GLOB renderer src/Renderer.cpp)
 file(GLOB inputs src/inputs/*.cpp)
 file(GLOB models src/models/*.cpp)
 
 add_executable(${PROJECT_NAME}
-               ${miniz}
                ${src}
-               # ${mapper}
-               # ${tracker}
+               ${mapper}
+               ${tracker}
+               ${renderer}
                ${inputs}
                ${models}
+               
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
