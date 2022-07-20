@@ -8,5 +8,5 @@ struct NICE: torch::nn::Module
 
 	MLP middle_decoder, fine_decoder, color_decoder;
 	MLP_no_xyz coarse_decoder;
-	torch::jit::script::Module cmodule, mmodule, fmodule;
+	torch::jit::script::Module cmodule, mmodule, fmodule, colormodule;
 };

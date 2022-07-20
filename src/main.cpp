@@ -11,7 +11,6 @@ int main(int argc, const char* argv[])
 	device_type = torch::kCUDA;
 	torch::Device device0(device_type, 0);
 
-	Tracker tracker(ns_config, cf_config);
 	CoFusionReader cfreader("/home/developer/nice-slam-cpp/Datasets/CoFusion/room4/");
 
 
@@ -79,21 +78,30 @@ int main(int argc, const char* argv[])
 	c_dict.insert(std::string("grid_color"), color_val);
 
 
-
 	NICE decoders(dim, c_dim, hidden_size, coarse_grid_len, middle_grid_len, fine_grid_len, color_grid_len, coarse, pose_emb);
+	Tracker tracker(ns_config, cf_config, c_dict);
 
-	auto p = torch::randn({1,10,3});
-	p = p.to(device0);
 
-	auto out = decoders.forward(p, c_dict, "coarse");
-	std::cout<<out<<std::endl;
-	out = decoders.forward(p, c_dict, "middle");
-	std::cout<<out<<std::endl;
-	out = decoders.forward(p, c_dict, "fine");
-	std::cout<<out<<std::endl;
-	// tracker.run(cfreader, decoders);
+	// auto p = torch::randn({1,10,3});
+	// p = p.to(device0);
+
+	// auto out = decoders.forward(p, c_dict, "coarse");
+	// std::cout<<out<<std::endl;
+	// out = decoders.forward(p, c_dict, "middle");
+	// std::cout<<out<<std::endl;
+	// out = decoders.forward(p, c_dict, "fine");
+	// std::cout<<out<<std::endl;
+	// out = decoders.forward(p, c_dict, "color");
+	// std::cout<<out<<std::endl;
+	tracker.run(cfreader, decoders);
 
 	return 0;
 }
 
 
+
+void test_cgird(c10::Dict<std::string, torch::Tensor> cd)
+{
+	
+
+}

@@ -2,7 +2,7 @@
 //June 11 '22, 16:54:00
 #include "Tracker.h"
 
-Tracker::Tracker(YAML::Node ns_config, YAML::Node cf_config):
+Tracker::Tracker(YAML::Node ns_config, YAML::Node cf_config, c10::Dict<std::string, torch::Tensor> c_dict):
 renderer()
 {
 	// scale = 1;
@@ -30,6 +30,7 @@ renderer()
 	cy = cf_config["cam"]["cy"].as<float>();
 
 	current_min_loss = 10000000000;
+	c = c_dict;
 }
 
 Tracker::~Tracker()

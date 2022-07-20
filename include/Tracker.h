@@ -8,7 +8,7 @@
 class Tracker
 {
 	public:
-		Tracker(YAML::Node ns_config, YAML::Node cf_config);
+		Tracker(YAML::Node ns_config, YAML::Node cf_config, c10::Dict<std::string, torch::Tensor> c_dict);
 		virtual ~Tracker();
 		void run(CoFusionReader cfreaderm , NICE decoders);
 		torch::Tensor optimize_cam_in_batch(torch::Tensor cam_tensor, torch::Tensor gt_color, torch::Tensor gt_depth, int batch_size , torch::optim::Adam& optimizer, NICE decoders);

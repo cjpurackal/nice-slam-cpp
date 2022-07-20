@@ -31,13 +31,13 @@ bound_(3,2)
 		mask = ~mask;
 
 		pi = pi.unsqueeze(0);
-		// auto ret = decoders.forward(pi, c, stage);
-	// 	ret = ret.squeeze(0);
+		auto ret = decoders.forward(pi, c, stage);
+		// ret = ret.squeeze(0);
 
-	// 	if ((ret.sizes().size() == 1) && (ret.sizes()[0] == 4))
-	// 		ret = ret.unsqueeze(0);
-	// 	ret.index({mask, 3}) = 100;
-	// 	rets.push_back(ret);
+		// if ((ret.sizes().size() == 1) && (ret.sizes()[0] == 4))
+		// 	ret = ret.unsqueeze(0);
+		// ret.index_put_({mask, 3}, 100);
+		// rets.push_back(ret);
 
 	}
 	// auto ret = torch::cat({rets}, 0);
