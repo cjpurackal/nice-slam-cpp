@@ -17,7 +17,7 @@ bound_(3,2)
 
 }
 
-/*torch::Tensor*/ void Renderer::eval_points(torch::Tensor p, NICE decoders, c10::Dict<std::string, torch::Tensor> c, std::string stage)
+torch::Tensor Renderer::eval_points(torch::Tensor p, NICE decoders, c10::Dict<std::string, torch::Tensor> c, std::string stage)
 {
 
 	auto p_split = torch::split(p, points_batch_size);
@@ -31,17 +31,17 @@ bound_(3,2)
 		mask = ~mask;
 
 		pi = pi.unsqueeze(0);
+		pi = pi.to(torch::Device(torch::kCUDA, 0));
 		auto ret = decoders.forward(pi, c, stage);
-		// ret = ret.squeeze(0);
-
-		// if ((ret.sizes().size() == 1) && (ret.sizes()[0] == 4))
-		// 	ret = ret.unsqueeze(0);
-		// ret.index_put_({mask, 3}, 100);
-		// rets.push_back(ret);
+		ret = ret.squeeze(0);
+		if ((ret.sizes().size() == 1) && (ret.sizes()[0] == 4))
+			ret = ret.unsqueeze(0);
+		ret.index_put_({mask, 3}, 100);
+		rets.push_back(ret);
 
 	}
-	// auto ret = torch::cat({rets}, 0);
-	// return ret;
+	auto ret = torch::cat({rets}, 0);
+	return ret;
 }
 
 void Renderer::render_batch_ray(c10::Dict<std::string, torch::Tensor> c, NICE decoders, torch::Tensor rays_d, torch::Tensor rays_o, std::string stage, torch::Tensor gt_depth, torch::Tensor& rgb_map, torch::Tensor& depth_map, torch::Tensor& depth_var, torch::Tensor& weights)
@@ -122,7 +122,7 @@ void Renderer::render_batch_ray(c10::Dict<std::string, torch::Tensor> c, NICE de
 
 	auto pts = rays_o.index({"...", None, Slice(None)}) + rays_d.index({"...", None, Slice(None)}) * z_vals.index({"...", Slice(None), None});
 	auto pointsf = pts.reshape({-1,3});
-	/* auto raw = */eval_points(pointsf, decoders, c, stage);
-	// raw = raw.reshape({n_rays, n_samples+n_sufrace, -1});
-	// raw2outputs_nerf_color(raw, z_vals, false, rays_d, rgb_map, depth_map, depth_var, weights);
+	auto raw = eval_points(pointsf, decoders, c, stage);
+	raw = raw.reshape({n_rays, n_samples+n_sufrace, -1});
+	raw2outputs_nerf_color(raw, z_vals, false, rays_d, rgb_map, depth_map, depth_var, weights);
 }

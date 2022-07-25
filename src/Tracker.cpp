@@ -59,26 +59,30 @@ torch::Tensor Tracker::optimize_cam_in_batch(torch::Tensor cam_tensor, torch::Te
 	
 	torch::Tensor color, depth, uncertainity, weights;
 	renderer.render_batch_ray(c, decoders, batch_rays_d, batch_rays_o, "color", batch_gt_depth, color, depth, uncertainity, weights);
-	// torch::Tensor mask;
+	torch::Tensor mask;
+	batch_gt_depth = batch_gt_depth.to(torch::Device(torch::kCUDA, 0));
+	batch_gt_color = batch_gt_color.to(torch::Device(torch::kCUDA, 0));
 
-	// if (handle_dynamic)
-	// {
-	// 	auto tmp = torch::abs(batch_gt_depth-depth)/torch::sqrt(uncertainity+1e-10);
-	// 	mask = (tmp < 10*tmp.median()) & (batch_gt_depth > 0);
-	// }
-	// else
-	// 	mask = batch_gt_depth > 0;
 
-	// auto loss = (torch::abs(batch_gt_depth-depth))/torch::sqrt(uncertainity+1e-10);
-	// loss = loss.index({mask}).sum();
+	if (handle_dynamic)
+	{
+		auto tmp = torch::abs(batch_gt_depth-depth)/*/torch::sqrt(uncertainity+1e-10)*/;
+		mask = (tmp < 10*tmp.median()) & (batch_gt_depth > 0);
+	}
+	else
+		mask = batch_gt_depth > 0;
 
-	// if (use_color_in_tracking)
-	// {
-	// 	auto color_loss = torch::abs(batch_gt_color - color);
-	// 	color_loss = color_loss.index({mask}).sum();
-	// 	loss = loss + w_color_loss*color_loss;
-	// }
+	auto loss = (torch::abs(batch_gt_depth-depth))/torch::sqrt(uncertainity+1e-10);
+	std::cout<<loss;
+	
+	loss = loss.index({mask}).sum();
 
+	if (use_color_in_tracking)
+	{
+		auto color_loss = torch::abs(batch_gt_color - color);
+		color_loss = color_loss.index({mask}).sum();
+		loss = loss + w_color_loss*color_loss;
+	}
 	// loss.backward();
 	// optimizer.step();
 	// optimizer.zero_grad();
