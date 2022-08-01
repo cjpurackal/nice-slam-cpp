@@ -147,19 +147,20 @@ inline void get_samples(int H0, int H1, int W0, int W1, int n, int H, int W, int
 
 inline void raw2outputs_nerf_color(torch::Tensor raw, torch::Tensor z_vals, bool occupancy, torch::Tensor rays_d, torch::Tensor& rgb_map, torch::Tensor& depth_map, torch::Tensor& depth_var, torch::Tensor& weights)
 {
-	auto dists = z_vals.index({"...", Slice(1, None)}) - z_vals.index({"...", Slice(-1, None)});
-	dists = torch::cat({dists, torch::tensor({1e10}).expand(dists.index({"...", Slice(None, 1)}).sizes())}, -1);
+	auto dists = z_vals.index({"...", Slice(1, None)}) - z_vals.index({"...", Slice(None, -1)});
+	dists.to(torch::kFloat32);
+	dists = torch::cat({dists, torch::tensor({1e10}).to(torch::kFloat32).expand(dists.index({"...", Slice(None, 1)}).sizes())}, -1);
 	dists = dists * torch::norm(rays_d.index({"...", None, Slice(None)}), -1);
 	auto rgb = raw.index({"...", Slice(None, -1)});
 	// //assuming occupancy is false
 	dists = dists.to(torch::Device(torch::kCUDA, 0));
 	auto alpha = 1 - torch::exp(-F::relu(raw.index({"...", -1}))*dists);
 
-	weights = alpha * torch::cumprod(
+	weights = alpha.to(torch::kFloat32) * torch::cumprod(
 										torch::cat({
 											torch::ones({alpha.sizes()[0], 1}).to(torch::Device(torch::kCUDA, 0))
-											,1-alpha + 1e-10
-										},-1)
+											,(1-alpha + 1e-10).to(torch::kFloat32)
+										},-1).to(torch::kFloat32)
 									, -1).index({Slice(None), Slice(None, -1)}); 
 
 	// std::cout<<"rgb sizes :"<<rgb.sizes()<<"tmp size :"<<tmp.sizes()<<std::endl;

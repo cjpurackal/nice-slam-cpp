@@ -58,7 +58,7 @@ torch::Tensor Tracker::optimize_cam_in_batch(torch::Tensor cam_tensor, torch::Te
 	batch_gt_color = batch_gt_color.index({inside_mask});
 	
 	torch::Tensor color, depth, uncertainity, weights;
-	renderer.render_batch_ray(c, decoders, batch_rays_d, batch_rays_o, "color", batch_gt_depth, color, depth, uncertainity, weights);
+ 	renderer.render_batch_ray(c, decoders, batch_rays_d, batch_rays_o, "color", batch_gt_depth, color, depth, uncertainity, weights);
 	torch::Tensor mask;
 	batch_gt_depth = batch_gt_depth.to(torch::Device(torch::kCUDA, 0));
 	batch_gt_color = batch_gt_color.to(torch::Device(torch::kCUDA, 0));
@@ -72,10 +72,7 @@ torch::Tensor Tracker::optimize_cam_in_batch(torch::Tensor cam_tensor, torch::Te
 	else
 		mask = batch_gt_depth > 0;
 
-	auto loss = (torch::abs(batch_gt_depth-depth))/torch::sqrt(uncertainity+1e-10);
-	std::cout<<loss;
-	
-	loss = loss.index({mask}).sum();
+	auto loss = ((torch::abs(batch_gt_depth-depth))/torch::sqrt(uncertainity+1e-10)).index({mask}).sum();
 
 	if (use_color_in_tracking)
 	{
@@ -83,11 +80,12 @@ torch::Tensor Tracker::optimize_cam_in_batch(torch::Tensor cam_tensor, torch::Te
 		color_loss = color_loss.index({mask}).sum();
 		loss = loss + w_color_loss*color_loss;
 	}
-	// loss.backward();
-	// optimizer.step();
-	// optimizer.zero_grad();
+	loss.requires_grad_(true);
+	loss.backward();
+	optimizer.step();
+	optimizer.zero_grad();
 
-	// return loss;
+	return loss;
 }
 
 void Tracker::update_para_from_mapping()
@@ -105,7 +103,7 @@ void Tracker::update_para_from_mapping()
 
 void Tracker::run(CoFusionReader cfreader, NICE decoders)
 {
-	/*while*/if(cfreader.hasMore())
+	while(cfreader.hasMore())
 	{
 		cfreader.getNext();
 		auto gt_color = cfreader.rgb;
@@ -125,12 +123,12 @@ void Tracker::run(CoFusionReader cfreader, NICE decoders)
 
    		auto initial_loss_camera_tensor = torch::abs(gt_camera_tensor-camera_tensor);
 
-   		num_cam_iters = 1;
+   		num_cam_iters = 10;
 
    		for (int i = 0; i < num_cam_iters; ++i)
    		{
-   			optimize_cam_in_batch(camera_tensor, gt_color_t, gt_depth_t, tracking_pixels , optimizer, decoders);
-   			// std::cout<<"loss: "<<loss<<std::endl;
+   			auto loss = optimize_cam_in_batch(camera_tensor, gt_color_t, gt_depth_t, tracking_pixels , optimizer, decoders);
+   			std::cout<<"loss: "<<loss<<std::endl;
    		}
 	}
 }
