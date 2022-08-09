@@ -22,21 +22,20 @@ torch::Tensor Renderer::eval_points(torch::Tensor p, NICE decoders, c10::Dict<st
 
 	auto p_split = torch::split(p, points_batch_size);
 	std::vector<torch::Tensor> rets;
+	std::cout<<"p_split size :"<<p_split.size()<<std::endl;
 	for (auto& pi: p_split)
 	{
-		auto mask_x = (pi.index({Slice(None), 0}) < bound.index({0,1}))  & (pi.index({Slice(None), 0}) < bound.index({0,0}));
-		auto mask_y = (pi.index({Slice(None), 1}) < bound.index({1,1}))  & (pi.index({Slice(None), 1}) < bound.index({1,0}));
-		auto mask_z = (pi.index({Slice(None), 2}) < bound.index({2,1}))  & (pi.index({Slice(None), 2}) < bound.index({2,0}));
+		auto mask_x = (pi.index({Slice(None), 0}) < bound.index({0,1}))  & (pi.index({Slice(None), 0}) > bound.index({0,0}));
+		auto mask_y = (pi.index({Slice(None), 1}) < bound.index({1,1}))  & (pi.index({Slice(None), 1}) > bound.index({1,0}));
+		auto mask_z = (pi.index({Slice(None), 2}) < bound.index({2,1}))  & (pi.index({Slice(None), 2}) > bound.index({2,0}));
 		auto mask = mask_x & mask_y & mask_z;
-		mask = ~mask;
-
 		pi = pi.unsqueeze(0);
 		pi = pi.to(torch::Device(torch::kCUDA, 0));
 		auto ret = decoders.forward(pi, c, stage);
 		ret = ret.squeeze(0);
 		if ((ret.sizes().size() == 1) && (ret.sizes()[0] == 4))
 			ret = ret.unsqueeze(0);
-		ret.index_put_({mask, 3}, 100);
+		ret.index_put_({~mask, 3}, 100);
 		rets.push_back(ret);
 
 	}
@@ -125,4 +124,5 @@ void Renderer::render_batch_ray(c10::Dict<std::string, torch::Tensor> c, NICE de
 	auto raw = eval_points(pointsf, decoders, c, stage);
 	raw = raw.reshape({n_rays, n_samples+n_sufrace, -1});
 	raw2outputs_nerf_color(raw, z_vals, false, rays_d, rgb_map, depth_map, depth_var, weights);
+	// std::cout<<depth_map;
 }
