@@ -23,13 +23,15 @@ Mapper::Mapper(YAML::Node ns_config, YAML::Node cf_config, c10::Dict<std::string
 	cx = cf_config["cam"]["cx"].as<float>();
 	cy = cf_config["cam"]["cy"].as<float>();
 	c = c_dict;
+	mapping_pixels = cf_config["mapping"]["pixels"].as<int>();
 }
 Mapper::~Mapper()
 {
 
 }
 
-void Mapper::keyframe_selection_overlap(torch::Tensor gt_color_, torch::Tensor gt_depth_, torch::Tensor c2w, std::vector<KeyFrame> keyframe_vector_, int k)
+
+void Mapper::keyframe_selection_overlap(torch::Tensor gt_color_, torch::Tensor gt_depth_, torch::Tensor c2w, std::vector<KeyFrame> keyframe_vector_, int k_overlap, std::vector<int>& selected_kf)
 {
 	torch::Tensor rays_o, rays_d, gt_depth, gt_color;
 	typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXf_rm; // same as MatrixXf, but with row-major memory layout
@@ -43,63 +45,89 @@ void Mapper::keyframe_selection_overlap(torch::Tensor gt_color_, torch::Tensor g
 
 	auto z_vals = near * (1.-t_vals) + far * (t_vals);
 	auto pts = rays_o.index({"...", None, Slice(None)}) + rays_d.index({"...", None, Slice(None)}) * z_vals.index({"...", Slice(None), None});
-	vertices = pts.reshape({-1, 3});
+	auto vertices = pts.reshape({-1, 3});
 
+	Eigen::Matrix3f k;
+	k << fx, 0, cx,
+		0, fy, cy,
+		0, 0, 1;
+	auto K = torch::from_blob(k.data(), {3, 3});
+	std::map<int, float> list_keyframe;
 
 	for (int i=0; i<keyframe_vector.size(); i++)
 	{
-		c2w = keyframe_vector[0].est_c2w;
+		c2w = keyframe_vector[i].est_c2w;
+		Eigen::Map<MatrixXf_rm> c2w_e(c2w.data_ptr<float>(), c2w.size(0), c2w.size(1));
+		Eigen::Matrix4f w2c_e = c2w_e.inverse();
+		auto w2c = torch::from_blob(w2c_e.data(), {4,4});
+		auto ones = torch::ones_like(vertices.index({Slice(None), 0})).reshape({-1, 1});
+		auto homo_vertices = torch::cat({vertices, ones}, 1).reshape({-1, 4, 1});
+		auto cam_cord_homo = torch::matmul(w2c, homo_vertices);
+		auto cam_cord = cam_cord_homo.index({Slice(None), Slice(None, 3)});
+
+		cam_cord.index({Slice(None), 0}) = cam_cord.index({Slice(None), 0}) * -1;
+		auto uv = torch::matmul(K, cam_cord);
+		auto z = uv.index({Slice(None), Slice(-1, None)})+1e-5;
+		uv = uv.index({Slice(None), Slice(None, 2)})/z;
+		//uv to float conver here TODO
+		int edge = 20;
+		auto mask = (uv.index({Slice(None), 0}) < W-edge) * (uv.index({Slice(None), 0}) > edge) * (uv.index({Slice(None), 1}) < H-edge) * (uv.index({Slice(None), 1}) > edge);
+		mask = mask & (z.index({Slice(None), Slice(None), 0}) < 0);
+		mask = mask.reshape(-1);
+		auto percentage_inside = mask.sum()/uv.sizes()[0];
+		float p_calc = percentage_inside.item<float>();	
+		if (p_calc > 0)
+			list_keyframe.insert({i, p_calc});
 
 	}
+	//sort the list_keyframe acc to perctage_inside
+	std::vector<pair> sorted_kf;
+    std::copy(list_keyframe.begin(),
+            list_keyframe.end(),
+            std::back_inserter<std::vector<pair>>(sorted_kf));
+    std::sort(sorted_kf.begin(), sorted_kf.end(),
+            [](const pair &l, const pair &r)
+            {
+              return l.second > r.second;
+            });
+    for (auto ele : sorted_kf)
+    	selected_kf.push_back(ele.first);
 
-
-
-	// for keyframeid, keyframe in enumerate(keyframe_dict):
-	//     c2w = keyframe['est_c2w'].cpu().numpy()
-	//     w2c = np.linalg.inv(c2w)
-	//     ones = np.ones_like(vertices[:, 0]).reshape(-1, 1)
-	//     homo_vertices = np.concatenate(
-	//         [vertices, ones], axis=1).reshape(-1, 4, 1)  # (N, 4)
-	//     cam_cord_homo = w2c@homo_vertices  # (N, 4, 1)=(4,4)*(N, 4, 1)
-	//     cam_cord = cam_cord_homo[:, :3]  # (N, 3, 1)
-	//     K = np.array([[fx, .0, cx], [.0, fy, cy],
-	//                  [.0, .0, 1.0]]).reshape(3, 3)
-	//     cam_cord[:, 0] *= -1
-	//     uv = K@cam_cord
-	//     z = uv[:, -1:]+1e-5
-	//     uv = uv[:, :2]/z
-	//     uv = uv.astype(np.float32)
-	//     edge = 20
-	//     mask = (uv[:, 0] < W-edge)*(uv[:, 0] > edge) * \
-	//         (uv[:, 1] < H-edge)*(uv[:, 1] > edge)
-	//     mask = mask & (z[:, :, 0] < 0)
-	//     mask = mask.reshape(-1)
-	//     percent_inside = mask.sum()/uv.shape[0]
-	//     list_keyframe.append(
-	//         {'id': keyframeid, 'percent_inside': percent_inside})
-
-	// list_keyframe = sorted(
-	//     list_keyframe, key=lambda i: i['percent_inside'], reverse=True)
-	// selected_keyframe_list = [dic['id']
-	//                           for dic in list_keyframe if dic['percent_inside'] > 0.00]
-	// selected_keyframe_list = list(np.random.permutation(
-	//     np.array(selected_keyframe_list))[:k])
-	// return selected_keyframe_list
+    if ((selected_kf.size()-k_overlap) > 0)
+    	selected_kf.assign(selected_kf.begin(), selected_kf.begin()+k_overlap);
 }
 
 void Mapper::optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth, torch::Tensor cur_c2w)
 {
         // bottom = torch.from_numpy(np.array([0, 0, 0, 1.]).reshape(
         //     [1, 4])).type(torch.float32).to(device)
-	std::vector<KeyFrame> optimize_frame;
+	std::vector<int> optimize_frame;
     torch::Tensor bottom = torch::tensor({0,0,0,1}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
     int num;
     if (keyframe_vector.size() != 0)
     {
     	//assuming selection metho to be overlap
         num = mapping_window_size-2;
-        keyframe_selection_overlap(cur_gt_color, cur_gt_depth, cur_c2w, keyframe_vector/*[:-1]*/, num);
+        keyframe_selection_overlap(cur_gt_color, cur_gt_depth, cur_c2w, keyframe_vector/*[:-1]*/, num, optimize_frame);
     }
+
+    int oldest_frame = -1;
+    if (keyframe_vector.size() > 0)
+    {
+    	optimize_frame.push_back(keyframe_vector.size()-1);
+    	oldest_frame = *min_element(optimize_frame.begin(), optimize_frame.end());
+    }	
+    optimize_frame.push_back(-1);
+
+    //keyinfo saving to do
+    int pixs_per_image = int(mapping_pixels/optimize_frame.size());
+    torch::Tensor mask_c2w;
+    if (frustum_feature_selection)
+    	mask_c2w = cur_c2w;
+
+    // for (auto &item: c)
+    // {
+    // }
 
 }
 
