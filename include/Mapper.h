@@ -22,7 +22,7 @@ class Mapper
 		void run(CoFusionReader cfreader);
 		void optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth, torch::Tensor cur_c2w);
 		void keyframe_selection_overlap(torch::Tensor gt_color_, torch::Tensor gt_depth_, torch::Tensor c2w, std::vector<KeyFrame> keyframe_vector_, int k_overlap, std::vector<int>& selected_kf);
-		torch::Tensor get_mask_from_c2w();
+		void get_mask_from_c2w(cv::Mat depth_, Eigen::MatrixXf c2w, torch::Tensor val_shape, std::string key);
 	private:
 
 		YAML::Node ns_cfg, cf_cfg;
@@ -35,6 +35,7 @@ class Mapper
 		float fx, fy, cx, cy;
 		std::vector<KeyFrame> keyframe_vector;
 		std::string keyframe_selection_method;
+		torch::Tensor bound;
 
 
 };
