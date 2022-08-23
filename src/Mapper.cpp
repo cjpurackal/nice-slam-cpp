@@ -71,19 +71,20 @@ void Mapper::get_mask_from_c2w(cv::Mat depth_mat, torch::Tensor c2w, torch::Tens
 	std::vector<torch::Tensor> depths_vec;
 	for (int i=0; i<uv.sizes()[0]; i+=remap_chunk)
 	{
-		torch::Tensor map_x = uv.index({Slice(i, None, i+remap_chunk), 0});
-		torch::Tensor map_y = uv.index({Slice(i, None, i+remap_chunk), 1});
-		cv::Mat mapx_mat = cv::Mat::eye(1,remap_chunk,CV_32F);
-		cv::Mat mapy_mat = cv::Mat::eye(1,remap_chunk,CV_32F);
+		auto map_x = uv.index({Slice(i, i+remap_chunk), 0});
+		auto map_y = uv.index({Slice(i, i+remap_chunk), 1});
+
+		cv::Mat mapx_mat = cv::Mat::eye(1,map_x.sizes()[0],CV_32F);
+		cv::Mat mapy_mat = cv::Mat::eye(1,map_x.sizes()[0],CV_32F);
 
 		std::memcpy(map_x.data_ptr(), mapx_mat.data, sizeof(float)*map_x.numel());
 		std::memcpy(map_y.data_ptr(), mapy_mat.data, sizeof(float)*map_y.numel());
 
-		cv::Mat depth_mat_(depth_mat.rows, depth_mat.cols, CV_32FC1);
+		cv::Mat depth_mat_(map_x.sizes()[0], 1, CV_32FC1);
 		cv::remap(depth_mat, depth_mat_, mapx_mat, mapy_mat, cv::INTER_LINEAR);
 
-		torch::Tensor depth_t=torch::ones({depth_mat.rows, depth_mat.cols});
-		std::memcpy(depth_mat_.data, depth_t.data_ptr(), sizeof(float)*remap_chunk);
+		torch::Tensor depth_t=torch::zeros({map_x.sizes()[0]});
+		std::memcpy(depth_mat_.data, depth_t.data_ptr(), sizeof(float)*map_x.sizes()[0]);
 		depths_vec.push_back(depth_t);
 	}
 	auto depths = torch::cat(depths_vec, 0);
@@ -93,10 +94,9 @@ void Mapper::get_mask_from_c2w(cv::Mat depth_mat, torch::Tensor c2w, torch::Tens
 
 	auto zero_mask = (depths == 0);
 	depths.index_put_({zero_mask}, torch::max(depths).item<float>());
-
+	// std::cout<<depths.sizes()<<" z sizes :"<<z.sizes()<<std::endl;
 	// # depth test
-	std::cout<<z.sizes();
-	auto mask_tmp = mask_ & (0 <= -1 * z.index({Slice(None), Slice(None), 0})); 
+	// auto mask_tmp = mask_ & (0 <= -1 * z.index({Slice(None), Slice(None), 0})); 
 	// auto mask_tmp2 = z.index({Slice(None), Slice(None), 0}) <= depths+0.5;
 	// mask_ = mask_.reshape({-1});
 
@@ -237,13 +237,15 @@ void Mapper::optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth
 	    cv::Mat depth_mat(cur_gt_depth.sizes()[0], cur_gt_depth.sizes()[1], CV_32FC1);
 		std::memcpy(cur_gt_depth.data_ptr(), depth_mat.data, sizeof(float)*cur_gt_depth.numel());
 
-		torch::Tensor coarse_val = c.at("grid_coarse");
-		get_mask_from_c2w(depth_mat, mask_c2w, torch::tensor(coarse_val.sizes()), "grid_coarse", mask);
+		// torch::Tensor coarse_val = c.at("grid_coarse");
+		// get_mask_from_c2w(depth_mat, mask_c2w, torch::tensor(coarse_val.sizes()), "grid_coarse", mask);
 		// coarse_val.to(torch::Device(torch::kCUDA, 0));
 		// coarse_val.requires_grad_(true);
 		// coarse_grid_para.push_back(coarse_val);
 
-		// torch::Tensor middle_val = c.at("grid_middle");
+		torch::Tensor middle_val = c.at("grid_middle");
+		get_mask_from_c2w(depth_mat, mask_c2w, torch::tensor({middle_val.sizes()[2],middle_val.sizes()[3], middle_val.sizes()[4]}), "grid_coarse", mask);
+
 		// middle_val.to(torch::Device(torch::kCUDA, 0));
 		// middle_val.requires_grad_(true);
 		// middle_grid_para.push_back(middle_val);
