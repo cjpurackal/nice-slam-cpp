@@ -46,6 +46,7 @@ void Mapper::get_mask_from_c2w(cv::Mat depth_mat, torch::Tensor c2w, torch::Tens
 	if (key == "grid_coarse")
 	{
 		mask = torch::ones({val_shape[2].item<int>(),val_shape[1].item<int>(),val_shape[0].item<int>()});
+		return;
 		
 	}
 
@@ -65,7 +66,7 @@ void Mapper::get_mask_from_c2w(cv::Mat depth_mat, torch::Tensor c2w, torch::Tens
 	auto uv = torch::matmul(K, cam_cord);
 	auto z = uv.index({Slice(None), Slice(-1, None)})+1e-5;
 	uv = uv.index({Slice(None), Slice(None, 2)})/z;
-	uv.to(torch::kFloat32);
+	uv = uv.to(torch::kFloat32);
 
 	int remap_chunk = int(3e4);
 	std::vector<torch::Tensor> depths_vec;
@@ -95,22 +96,28 @@ void Mapper::get_mask_from_c2w(cv::Mat depth_mat, torch::Tensor c2w, torch::Tens
 	auto zero_mask = (depths == 0);
 	depths.index_put_({zero_mask}, torch::max(depths).item<float>());
 	// std::cout<<depths.sizes()<<" z sizes :"<<z.sizes()<<std::endl;
-	// # depth test
-	// auto mask_tmp = mask_ & (0 <= -1 * z.index({Slice(None), Slice(None), 0})); 
-	// auto mask_tmp2 = z.index({Slice(None), Slice(None), 0}) <= depths+0.5;
-	// mask_ = mask_.reshape({-1});
+	// depth test
+
+	auto mask_tmp = mask_ & (0 <= -1 * z.index({Slice(None), Slice(None), 0})); 
+	auto mask_tmp2 = z.index({Slice(None), 0, 0}) <= depths+0.5;
+	mask_ = mask_tmp & mask_tmp2.unsqueeze(-1);
+	mask_ = mask_.reshape({-1});
 
 	// # add feature grid near cam center
-	// auto ray_o_ = c2w_e.topRightCorner(3,1);
-	// auto ray_o = torch::from_blob(ray_o_.data(), {3,1}).unsqueeze(0);
+	auto ray_o_ = c2w_e.topRightCorner(3,1);
+	auto ray_o = torch::from_blob(ray_o_.data(), {3,1}).unsqueeze(0);
+	ray_o = ray_o.squeeze(-1);
 
-	// auto dist_ = points-ray_o;
-	// auto dist = torch::sum(dist_*dist_, 1);
-	// auto mask2 = dist < 0.5*0.5;
-	// mask = mask_ | mask2;
 
-	// points = points.index({mask});
-	// mask = mask.reshape({val_shape[2].item<int>(), val_shape[1].item<int>(), val_shape[0].item<int>()});
+
+	auto dist_ = points-ray_o;
+	auto dist = torch::sum(dist_*dist_, 1);
+	auto mask2 = dist < 0.5*0.5;
+
+	mask = mask_ | mask2;
+
+	points = points.index({mask});
+	mask = mask.reshape({val_shape[2].item<int>(), val_shape[1].item<int>(), val_shape[0].item<int>()});
 
 }
 
@@ -152,7 +159,7 @@ void Mapper::keyframe_selection_overlap(torch::Tensor gt_color_, torch::Tensor g
 		auto uv = torch::matmul(K, cam_cord);
 		auto z = uv.index({Slice(None), Slice(-1, None)})+1e-5;
 		uv = uv.index({Slice(None), Slice(None, 2)})/z;
-		uv.to(torch::kFloat32);
+		uv = uv.to(torch::kFloat32);
 		int edge = 20;
 		auto mask = (uv.index({Slice(None), 0}) < W-edge) * (uv.index({Slice(None), 0}) > edge) * (uv.index({Slice(None), 1}) < H-edge) * (uv.index({Slice(None), 1}) > edge);
 		mask = mask & (z.index({Slice(None), Slice(None), 0}) < 0);
@@ -237,28 +244,34 @@ void Mapper::optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth
 	    cv::Mat depth_mat(cur_gt_depth.sizes()[0], cur_gt_depth.sizes()[1], CV_32FC1);
 		std::memcpy(cur_gt_depth.data_ptr(), depth_mat.data, sizeof(float)*cur_gt_depth.numel());
 
-		// torch::Tensor coarse_val = c.at("grid_coarse");
-		// get_mask_from_c2w(depth_mat, mask_c2w, torch::tensor(coarse_val.sizes()), "grid_coarse", mask);
-		// coarse_val.to(torch::Device(torch::kCUDA, 0));
-		// coarse_val.requires_grad_(true);
-		// coarse_grid_para.push_back(coarse_val);
+		torch::Tensor coarse_val = c.at("grid_coarse");
+		get_mask_from_c2w(depth_mat, mask_c2w, torch::tensor({coarse_val.sizes()[2],coarse_val.sizes()[3], coarse_val.sizes()[4]}), "grid_coarse", mask);
+		mask = mask.permute({2,1,0}).unsqueeze(0).unsqueeze(0).tile({1,coarse_val.sizes()[1], 1, 1, 1}); //using instead of repeat
+		mask = mask.to(torch::kBool);
+		coarse_val.to(torch::Device(torch::kCUDA, 0));
+		auto coarse_val_grad = coarse_val.index({mask});
 
 		torch::Tensor middle_val = c.at("grid_middle");
-		get_mask_from_c2w(depth_mat, mask_c2w, torch::tensor({middle_val.sizes()[2],middle_val.sizes()[3], middle_val.sizes()[4]}), "grid_coarse", mask);
+		get_mask_from_c2w(depth_mat, mask_c2w, torch::tensor({middle_val.sizes()[2],middle_val.sizes()[3], middle_val.sizes()[4]}), "grid_middle", mask);
+		mask = mask.permute({2,1,0}).unsqueeze(0).unsqueeze(0).tile({1,middle_val.sizes()[1], 1, 1, 1}); //using instead of repeat
+		mask = mask.to(torch::kBool);
+		middle_val.to(torch::Device(torch::kCUDA, 0));
+		auto middle_val_grad = middle_val.index({mask});
 
-		// middle_val.to(torch::Device(torch::kCUDA, 0));
-		// middle_val.requires_grad_(true);
-		// middle_grid_para.push_back(middle_val);
+		torch::Tensor fine_val = c.at("grid_fine");
+		get_mask_from_c2w(depth_mat, mask_c2w, torch::tensor({fine_val.sizes()[2],fine_val.sizes()[3], fine_val.sizes()[4]}), "grid_fine", mask);
+		mask = mask.permute({2,1,0}).unsqueeze(0).unsqueeze(0).tile({1,fine_val.sizes()[1], 1, 1, 1}); //using instead of repeat
+		mask = mask.to(torch::kBool);
+		fine_val.to(torch::Device(torch::kCUDA, 0));
+		auto fine_val_grad = fine_val.index({mask});
 
-		// torch::Tensor fine_val = c.at("grid_fine");
-		// fine_val.to(torch::Device(torch::kCUDA, 0));
-		// fine_val.requires_grad_(true);
-		// fine_grid_para.push_back(fine_val);
+		torch::Tensor color_val = c.at("grid_color");
+		get_mask_from_c2w(depth_mat, mask_c2w, torch::tensor({color_val.sizes()[2],color_val.sizes()[3], color_val.sizes()[4]}), "grid_color", mask);
+		mask = mask.permute({2,1,0}).unsqueeze(0).unsqueeze(0).tile({1,color_val.sizes()[1], 1, 1, 1}); //using instead of repeat
+		mask = mask.to(torch::kBool);
+		color_val.to(torch::Device(torch::kCUDA, 0));
+		auto color_val_grad = color_val.index({mask});
 
-		// torch::Tensor color_val = c.at("grid_color");
-		// color_val.to(torch::Device(torch::kCUDA, 0));
-		// color_val.requires_grad_(true);
-		// color_grid_para.push_back(color_val);
 	}
 
 
