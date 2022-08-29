@@ -20,11 +20,11 @@ class Mapper
 		Mapper(YAML::Node ns_config, YAML::Node cf_config, c10::Dict<std::string, torch::Tensor> c_dict, bool coarse_mapper);
 		virtual ~Mapper();
 		void run(CoFusionReader cfreader, NICE& decoders);
-		void optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth, torch::Tensor gt_cur_c2w,  torch::Tensor cur_c2w, NICE& decoders);
+		void optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth, torch::Tensor gt_cur_c2w,  torch::Tensor& cur_c2w, NICE& decoders);
 		void keyframe_selection_overlap(torch::Tensor gt_color_, torch::Tensor gt_depth_, torch::Tensor c2w, std::vector<KeyFrame> keyframe_vector_, int k_overlap, std::vector<int>& selected_kf);
 		void get_mask_from_c2w(cv::Mat depth_mat, torch::Tensor c2w, torch::Tensor val_shape, std::string key, torch::Tensor& mask);
 	private:
-
+		Renderer renderer;
 		YAML::Node ns_cfg, cf_cfg;
 		bool color_refine, coarse_mapper, fix_color, frustum_feature_selection, BA;
 		c10::Dict<std::string, torch::Tensor> c;
@@ -39,5 +39,8 @@ class Mapper
 		bool fix_fine;
 		int num_joint_iters;
 		std::string stage;
+		float lr_factor, BA_cam_lr;
+		float w_color_loss;
+
 
 };
