@@ -16,6 +16,7 @@ renderer()
 	fix_fine = ns_cfg["mapping"]["fix_fine"].as<bool>();
 	keyframe_selection_method = ns_cfg["mapping"]["keyframe_selection_method"].as<std::string>();
 	frustum_feature_selection = ns_cfg["mapping"]["frustum_feature_selection"].as<bool>();
+	keyframe_every = ns_cfg["mapping"]["keyframe_every"].as<int>();
 	BA = false;
 	coarse_mapper = cmapr;
 	H = cf_config["cam"]["H"].as<int>();
@@ -426,76 +427,76 @@ void Mapper::optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth
 		auto t = std::get<0>(torch::min(std::get<0>(torch::max(t_, 2)),1));
 		t = t.to(torch::Device(torch::kCUDA, 0));
 		auto inside_mask = t>=batch_gt_depth;
-		// batch_rays_d = batch_rays_d.index({inside_mask});
-		// batch_rays_o = batch_rays_o.index({inside_mask});
-		// batch_gt_depth = batch_gt_depth.index({inside_mask});
-		// batch_gt_color = batch_gt_color.index({inside_mask});
+		batch_rays_d = batch_rays_d.index({inside_mask});
+		batch_rays_o = batch_rays_o.index({inside_mask});
+		batch_gt_depth = batch_gt_depth.index({inside_mask});
+		batch_gt_color = batch_gt_color.index({inside_mask});
 		
-		// torch::Tensor color, depth, uncertainity, weights;
-	 // 	renderer.render_batch_ray(c, decoders, batch_rays_d, batch_rays_o, "color", batch_gt_depth, color, depth, uncertainity, weights);
-		// torch::Tensor mask;
-		// batch_gt_depth = batch_gt_depth.to(torch::Device(torch::kCUDA, 0));
-		// batch_gt_color = batch_gt_color.to(torch::Device(torch::kCUDA, 0));
+		torch::Tensor color, depth, uncertainity, weights;
+		renderer.render_batch_ray(c, decoders, batch_rays_d.to(torch::Device(torch::kCUDA, 0)), batch_rays_o.to(torch::Device(torch::kCUDA, 0)), "color", batch_gt_depth, color, depth, uncertainity, weights);
+		torch::Tensor mask;
+		batch_gt_depth = batch_gt_depth.to(torch::Device(torch::kCUDA, 0));
+		batch_gt_color = batch_gt_color.to(torch::Device(torch::kCUDA, 0));
 
-		// auto depth_mask = batch_gt_depth > 0;
-		// auto loss = ((torch::abs(batch_gt_depth.index({depth_mask})-depth.index({depth_mask})))).sum();
+		auto depth_mask = batch_gt_depth > 0;
+		auto loss = ((torch::abs(batch_gt_depth.index({depth_mask})-depth.index({depth_mask})))).sum();
 
-		// if (stage == "color")
-		// {
-		// 	auto color_loss = torch::abs(batch_gt_color - color).sum();
-		// 	loss = loss + w_color_loss*color_loss;
-		// }
-		// loss.requires_grad_(true);
-		// loss.backward();
-		// optimizer.step();
-		// optimizer.zero_grad();
+		if (stage == "color")
+		{
+			auto color_loss = torch::abs(batch_gt_color - color).sum();
+			loss = loss + w_color_loss*color_loss;
+		}
+		loss.requires_grad_(true);
+		loss.backward();
+		optimizer.step();
+		optimizer.zero_grad();
 
-   //      if (frustum_feature_selection)
-   //      {
-			// if (coarse_mapper)
-			// {
-			// 	coarse_val.index_put_({coarse_mask}, coarse_val_grad);
-			// 	c.insert("grid_coarse", coarse_val);
-			// }
-			// else
-			// {
-			// 	middle_val.index_put_({middle_mask}, middle_val_grad);
-			// 	c.insert("grid_middle", middle_val);
-			// 	fine_val.index_put_({fine_mask}, fine_val_grad);
-			// 	c.insert("grid_fine", fine_val);
-			// 	color_val.index_put_({color_mask}, color_val_grad);
-			// 	c.insert("grid_color", color_val);
-			// }
-   //      }
+        if (frustum_feature_selection)
+        {
+			if (coarse_mapper)
+			{
+				coarse_val.index_put_({coarse_mask}, coarse_val_grad);
+				c.insert("grid_coarse", coarse_val);
+			}
+			else
+			{
+				middle_val.index_put_({middle_mask}, middle_val_grad);
+				c.insert("grid_middle", middle_val);
+				fine_val.index_put_({fine_mask}, fine_val_grad);
+				c.insert("grid_fine", fine_val);
+				color_val.index_put_({color_mask}, color_val_grad);
+				c.insert("grid_color", color_val);
+			}
+        }
 	}
 
-	// if (BA)
-	// {
-	// 	int camera_tensor_id = 0;
-	// 	for (auto& frame : optimize_frame)
-	// 	{
-	// 		if (frame != -1)
-	// 		{
-	// 			if (frame != oldest_frame)
-	// 			{
-	// 				c2w = get_camera_from_tensor(camera_tensor_list[camera_tensor_id]);
-	// 				c2w = torch::cat({c2w, bottom}, 0);
-	// 				camera_tensor_id++;
-	// 				keyframe_vector[frame].est_c2w = c2w;
-	// 			}
-	// 		}
-	// 		else
-	// 		{
-	// 				c2w = get_camera_from_tensor(camera_tensor_list[-1]);
-	// 				c2w = torch::cat({c2w, bottom}, 0);
-	// 				cur_c2w = c2w;
-	// 		}
-	// 	}
-	// }
+	if (BA)
+	{
+		int camera_tensor_id = 0;
+		for (auto& frame : optimize_frame)
+		{
+			if (frame != -1)
+			{
+				if (frame != oldest_frame)
+				{
+					c2w = get_camera_from_tensor(camera_tensor_list[camera_tensor_id]);
+					c2w = torch::cat({c2w, bottom}, 0);
+					camera_tensor_id++;
+					keyframe_vector[frame].est_c2w = c2w;
+				}
+			}
+			else
+			{
+					c2w = get_camera_from_tensor(camera_tensor_list[-1]);
+					c2w = torch::cat({c2w, bottom}, 0);
+					cur_c2w = c2w;
+			}
+		}
+	}
 
 }
 
-void Mapper::run(CoFusionReader cfreader, NICE& decoders) 
+void Mapper::run(CoFusionReader cfreader, NICE& decoders, std::vector<torch::Tensor>& estimate_c2w_vec) 
 {
 	bool init = false;
 	int idx = 0;
@@ -545,30 +546,25 @@ void Mapper::run(CoFusionReader cfreader, NICE& decoders)
 		torch::Tensor cur_c2w = torch::from_blob(I.data(), {4,4});
 		num_joint_iters = int(num_joint_iters/outer_joint_iters);
 		outer_joint_iters = 1;  // delete this
-		for (int i=0; i<outer_joint_iters; i++)
+		for (int outer_joint_iter=0; outer_joint_iter<outer_joint_iters; outer_joint_iter++)
 		{
 			BA = ((keyframe_list.size() > 4) && (ns_cfg["mapping"]["BA"].as<bool>()) &&(!coarse_mapper));
-			// _ = self.optimize_map(num_joint_iters, lr_factor, idx, gt_color, gt_depth, gt_c2w, self.keyframe_dict, self.keyframe_list, cur_c2w=cur_c2w)
-			
 			optimize_map(gt_color_t, gt_depth_t, gt_c2w_t, cur_c2w, decoders);
-			torch::Tensor sz = torch::tensor(c.at("grid_fine").sizes());
-			if (BA)
-			{
-				// cur_c2w = _
-				// self.estimate_c2w_list[idx] = cur_c2w
-			}
+			// torch::Tensor sz = torch::tensor(c.at("grid_fine").sizes());
+			// if (BA)
+			// 	estimate_c2w_vec[idx] = cur_c2w;
 
-			// # add new frame to keyframe set
-			// if outer_joint_iter == outer_joint_iters-1:
-			//     if (idx % self.keyframe_every == 0 or (idx == self.n_img-2)) \
-			//             and (idx not in self.keyframe_list):
-			//         self.keyframe_list.append(idx)
-			//         self.keyframe_dict.append({'gt_c2w': gt_c2w.cpu(), 'idx': idx, 'color': gt_color.cpu(
-			//         ), 'depth': gt_depth.cpu(), 'est_c2w': cur_c2w.clone()})
-
+			// // # add new frame to keyframe set
+			// if (outer_joint_iter == outer_joint_iters-1)
+			// {
+			//     if (((idx % keyframe_every == 0) || (idx == cfreader.n_imgs-2)) && (std::find(keyframe_vector.begin(), keyframe_vector.end(), key) == keyframe_vector.end()))
+			//     {
+			// 		self.keyframe_list.append(idx)
+			// 		self.keyframe_dict.append({'gt_c2w': gt_c2w.cpu(), 'idx': idx, 'color': gt_color.cpu(
+			// 		), 'depth': gt_depth.cpu(), 'est_c2w': cur_c2w.clone()})
+			//     }
+			// }
 		}
-
-
 	}
 }
 
