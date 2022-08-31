@@ -209,9 +209,9 @@ void Mapper::optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth
 	}
 
 	int oldest_frame = -1;
-	if (keyframe_vector.size() > 0)
+	if (keyframe_lvector.size() > 0)
 	{
-		optimize_frame.push_back(keyframe_vector.size()-1);
+		optimize_frame.push_back(keyframe_lvector.size()-1);
 		oldest_frame = *min_element(optimize_frame.begin(), optimize_frame.end());
 	}	
 	optimize_frame.push_back(-1);
@@ -551,19 +551,24 @@ void Mapper::run(CoFusionReader cfreader, NICE& decoders, std::vector<torch::Ten
 			BA = ((keyframe_list.size() > 4) && (ns_cfg["mapping"]["BA"].as<bool>()) &&(!coarse_mapper));
 			optimize_map(gt_color_t, gt_depth_t, gt_c2w_t, cur_c2w, decoders);
 			// torch::Tensor sz = torch::tensor(c.at("grid_fine").sizes());
-			// if (BA)
-			// 	estimate_c2w_vec[idx] = cur_c2w;
+			if (BA)
+				estimate_c2w_vec[idx] = cur_c2w;
 
 			// // # add new frame to keyframe set
-			// if (outer_joint_iter == outer_joint_iters-1)
-			// {
-			//     if (((idx % keyframe_every == 0) || (idx == cfreader.n_imgs-2)) && (std::find(keyframe_vector.begin(), keyframe_vector.end(), key) == keyframe_vector.end()))
-			//     {
-			// 		self.keyframe_list.append(idx)
-			// 		self.keyframe_dict.append({'gt_c2w': gt_c2w.cpu(), 'idx': idx, 'color': gt_color.cpu(
-			// 		), 'depth': gt_depth.cpu(), 'est_c2w': cur_c2w.clone()})
-			//     }
-			// }
+			if (outer_joint_iter == outer_joint_iters-1)
+			{
+			    if (((idx % keyframe_every == 0) || (idx == cfreader.n_imgs-2)) && (std::find(keyframe_lvector.begin(), keyframe_lvector.end(), idx) == keyframe_lvector.end()))
+			    {
+					keyframe_lvector.push_back(idx);
+					KeyFrame kf;
+					kf.gt_c2w = gt_c2w_t;
+					kf.idx = idx;
+					kf.color = gt_color_t;
+					kf.depth = gt_depth_t;
+					kf.est_c2w = cur_c2w;
+					keyframe_vector.push_back(kf);
+			    }
+			}
 		}
 	}
 }

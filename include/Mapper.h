@@ -34,6 +34,7 @@ class Mapper
 		int H, W;
 		float fx, fy, cx, cy;
 		std::vector<KeyFrame> keyframe_vector;
+		std::vector<int> keyframe_lvector;
 		std::string keyframe_selection_method;
 		torch::Tensor bound;
 		bool fix_fine;
