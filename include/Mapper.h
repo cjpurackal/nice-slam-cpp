@@ -17,20 +17,18 @@ struct KeyFrame
 class Mapper
 {
 	public:
-		Mapper(YAML::Node ns_config, YAML::Node cf_config, c10::Dict<std::string, torch::Tensor> c_dict, bool coarse_mapper);
+		Mapper(YAML::Node ns_config, YAML::Node cf_config, bool coarse_mapper);
 		virtual ~Mapper();
-		void run(CoFusionReader cfreader, NICE& decoders, std::vector<torch::Tensor>& estimate_c2w_vec);
-		void optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth, torch::Tensor gt_cur_c2w,  torch::Tensor& cur_c2w, NICE& decoders);
+		void run(CoFusionReader cfreader, NICE& decoders,  c10::Dict<std::string, torch::Tensor>& c_dict, std::vector<torch::Tensor>& estimate_c2w_vec, int idx);
+		void optimize_map(int num_joint_iters_, c10::Dict<std::string, torch::Tensor>& c_dict, torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth, torch::Tensor gt_cur_c2w,  torch::Tensor& cur_c2w, NICE& decoders);
 		void keyframe_selection_overlap(torch::Tensor gt_color_, torch::Tensor gt_depth_, torch::Tensor c2w, std::vector<KeyFrame> keyframe_vector_, int k_overlap, std::vector<int>& selected_kf);
 		void get_mask_from_c2w(cv::Mat depth_mat, torch::Tensor c2w, torch::Tensor val_shape, std::string key, torch::Tensor& mask);
 	private:
 		Renderer renderer;
 		YAML::Node ns_cfg, cf_cfg;
 		bool color_refine, coarse_mapper, fix_color, frustum_feature_selection, BA;
-		c10::Dict<std::string, torch::Tensor> c;
 		int mapping_window_size, mapping_pixels;
 		float middle_iter_ratio, fine_iter_ratio;
-		std::vector<int> keyframe_list;
 		int H, W;
 		float fx, fy, cx, cy;
 		std::vector<KeyFrame> keyframe_vector;

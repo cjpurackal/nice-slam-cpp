@@ -3,7 +3,7 @@
 
 #include "Mapper.h"
 
-Mapper::Mapper(YAML::Node ns_config, YAML::Node cf_config, c10::Dict<std::string, torch::Tensor> c_dict, bool cmapr):
+Mapper::Mapper(YAML::Node ns_config, YAML::Node cf_config, bool cmapr):
 renderer()
 {
 	ns_cfg = ns_config;
@@ -25,7 +25,6 @@ renderer()
 	fy = cf_config["cam"]["fy"].as<float>();
 	cx = cf_config["cam"]["cx"].as<float>();
 	cy = cf_config["cam"]["cy"].as<float>();
-	c = c_dict;
 	mapping_pixels = cf_config["mapping"]["pixels"].as<int>();
 	bound = torch::tensor({{-4.5, 3.82},{-1.5, 2.02}, {-3.0, 2.76}});
 	num_joint_iters = ns_cfg["mapping"]["iters"].as<int>();
@@ -196,7 +195,7 @@ void Mapper::keyframe_selection_overlap(torch::Tensor gt_color_, torch::Tensor g
 		selected_kf.assign(selected_kf.begin(), selected_kf.begin()+k_overlap);
 }
 
-void Mapper::optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth, torch::Tensor gt_cur_c2w,  torch::Tensor& cur_c2w, NICE& decoders)
+void Mapper::optimize_map(int num_joint_iters_, c10::Dict<std::string, torch::Tensor>& c, torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth, torch::Tensor gt_cur_c2w,  torch::Tensor& cur_c2w, NICE& decoders)
 {
 	std::vector<int> optimize_frame;
 	torch::Tensor bottom = torch::tensor({0,0,0,1}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA));
@@ -231,67 +230,62 @@ void Mapper::optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth
 		coarse_val = c.at("grid_coarse");
 		coarse_val.to(torch::Device(torch::kCUDA, 0));
 		coarse_val.requires_grad_(true);
+		c.insert(std::string("grid_coarse"), coarse_val);
 		coarse_grid_para.push_back(coarse_val);
 
 		middle_val = c.at("grid_middle");
 		middle_val.to(torch::Device(torch::kCUDA, 0));
 		middle_val.requires_grad_(true);
+		c.insert(std::string("grid_middle"), middle_val);
 		middle_grid_para.push_back(middle_val);
 
 		fine_val = c.at("grid_fine");
 		fine_val.to(torch::Device(torch::kCUDA, 0));
 		fine_val.requires_grad_(true);
+		c.insert(std::string("grid_fine"), fine_val);
 		fine_grid_para.push_back(fine_val);
 
 		color_val = c.at("grid_color");
 		color_val.to(torch::Device(torch::kCUDA, 0));
 		color_val.requires_grad_(true);
+		c.insert(std::string("grid_color"), color_val);
 		color_grid_para.push_back(color_val);
 	}
 	else
 	{
-		// incomplete
 		cv::Mat depth_mat(cur_gt_depth.sizes()[0], cur_gt_depth.sizes()[1], CV_32FC1);
 		std::memcpy(cur_gt_depth.data_ptr(), depth_mat.data, sizeof(float)*cur_gt_depth.numel());
 
 		coarse_val = c.at("grid_coarse");
 		get_mask_from_c2w(depth_mat, mask_c2w, torch::tensor({coarse_val.sizes()[2],coarse_val.sizes()[3], coarse_val.sizes()[4]}), "grid_coarse", coarse_mask);
-		coarse_mask = coarse_mask.permute({2,1,0}).unsqueeze(0).unsqueeze(0).tile({1,coarse_val.sizes()[1], 1, 1, 1}); //using instead of repeat
+		coarse_mask = coarse_mask.permute({2,1,0}).unsqueeze(0).unsqueeze(0).tile({1,coarse_val.sizes()[1], 1, 1, 1}); //using tile instead of repeat
 		coarse_mask = coarse_mask.to(torch::kBool);
 		coarse_val.to(torch::Device(torch::kCUDA, 0));
 		coarse_val_grad = coarse_val.index({coarse_mask});
-		// masked_c_grad.insert({"grid_coarse", coarse_val_grad});
-		// masked_c_grad.insert({"grid_coarse_mask", coarse_mask});
 		coarse_grid_para.push_back(coarse_val_grad);
 
 		middle_val = c.at("grid_middle");
 		get_mask_from_c2w(depth_mat, mask_c2w, torch::tensor({middle_val.sizes()[2],middle_val.sizes()[3], middle_val.sizes()[4]}), "grid_middle", middle_mask);
-		middle_mask = middle_mask.permute({2,1,0}).unsqueeze(0).unsqueeze(0).tile({1,middle_val.sizes()[1], 1, 1, 1}); //using instead of repeat
+		middle_mask = middle_mask.permute({2,1,0}).unsqueeze(0).unsqueeze(0).tile({1,middle_val.sizes()[1], 1, 1, 1}); //using tile instead of repeat
 		middle_mask = middle_mask.to(torch::kBool);
 		middle_val.to(torch::Device(torch::kCUDA, 0));
 		middle_val_grad = middle_val.index({middle_mask});
-		// masked_c_grad.insert({"grid_middle", middle_val_grad});
-		// masked_c_grad.insert({"grid_middle_mask", middle_mask});
 		middle_grid_para.push_back(middle_val_grad);
 
 		fine_val = c.at("grid_fine");
 		get_mask_from_c2w(depth_mat, mask_c2w, torch::tensor({fine_val.sizes()[2],fine_val.sizes()[3], fine_val.sizes()[4]}), "grid_fine", fine_mask);
-		fine_mask = fine_mask.permute({2,1,0}).unsqueeze(0).unsqueeze(0).tile({1,fine_val.sizes()[1], 1, 1, 1}); //using instead of repeat
+		fine_mask = fine_mask.permute({2,1,0}).unsqueeze(0).unsqueeze(0).tile({1,fine_val.sizes()[1], 1, 1, 1}); //using tile instead of repeat
 		fine_mask = fine_mask.to(torch::kBool);
 		fine_val.to(torch::Device(torch::kCUDA, 0));
 		fine_val_grad = fine_val.index({fine_mask});
-		// masked_c_grad.insert({"grid_fine", fine_val_grad});
-		// masked_c_grad.insert({"grid_fine_mask", fine_mask});
 		fine_grid_para.push_back(fine_val_grad);
 
 		color_val = c.at("grid_color");
 		get_mask_from_c2w(depth_mat, mask_c2w, torch::tensor({color_val.sizes()[2],color_val.sizes()[3], color_val.sizes()[4]}), "grid_color", color_mask);
-		color_mask = color_mask.permute({2,1,0}).unsqueeze(0).unsqueeze(0).tile({1,color_val.sizes()[1], 1, 1, 1}); //using instead of repeat
+		color_mask = color_mask.permute({2,1,0}).unsqueeze(0).unsqueeze(0).tile({1,color_val.sizes()[1], 1, 1, 1}); //using tile instead of repeat
 		color_mask = color_mask.to(torch::kBool);
 		color_val.to(torch::Device(torch::kCUDA, 0));
 		color_val_grad = color_val.index({color_mask});
-		// masked_c_grad.insert({"grid_color", color_val_grad});
-		// masked_c_grad.insert({"grid_color_mask", color_mask});
 		color_grid_para.push_back(color_val_grad);
 	}
 
@@ -334,7 +328,7 @@ void Mapper::optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth
 
 	}
 	torch::optim::Adam optimizer({decoders_para_list, coarse_grid_para, middle_grid_para, fine_grid_para, color_grid_para, camera_tensor_list}, torch::optim::AdamOptions(0));
-	for (int joint_iter=0; joint_iter<num_joint_iters; joint_iter++)
+	for (int joint_iter=0; joint_iter<num_joint_iters_; joint_iter++)
 	{
 		if (frustum_feature_selection)
 		{
@@ -356,9 +350,9 @@ void Mapper::optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth
 		}
 		if (coarse_mapper)
 			stage = "coarse";
-		else if (joint_iter <= int(num_joint_iters*middle_iter_ratio))
+		else if (joint_iter <= int(num_joint_iters_*middle_iter_ratio))
 			stage = "middle";
-		else if (joint_iter <= int(num_joint_iters*fine_iter_ratio))
+		else if (joint_iter <= int(num_joint_iters_*fine_iter_ratio))
 			stage = "middle";
 		else
 			stage = "color";
@@ -496,16 +490,15 @@ void Mapper::optimize_map(torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth
 
 }
 
-void Mapper::run(CoFusionReader cfreader, NICE& decoders, std::vector<torch::Tensor>& estimate_c2w_vec) 
+void Mapper::run(CoFusionReader cfreader, NICE& decoders, c10::Dict<std::string, torch::Tensor>& c, std::vector<torch::Tensor>& estimate_c2w_vec, int idx)
 {
-	bool init = false;
-	int idx = 0;
+	bool init = true;
 	int prev_idx = -1;
 	int outer_joint_iters;
 	/*while*/ if(1)
 	{
 		// while True waiter TODO
-		cfreader.getNext();
+		cfreader.getNext(); //change to idx based?
 		auto gt_color = cfreader.rgb;
 		auto gt_depth = cfreader.depth; 
 		auto gt_color_t = torch::from_blob(gt_color.data, {cfreader.height, cfreader.width, 3}); // 0-1 range 
@@ -536,20 +529,16 @@ void Mapper::run(CoFusionReader cfreader, NICE& decoders, std::vector<torch::Ten
 		{
 			outer_joint_iters = 1;
 			lr_factor = ns_cfg["mapping"]["lr_first_factor"].as<int>();
-			num_joint_iters = ns_cfg["mapping"]["num_joint_iters"].as<int>();
-
+			num_joint_iters = ns_cfg["mapping"]["iters_first"].as<int>();
 		}
 
-		Eigen::MatrixXf I;
-		I = Eigen::MatrixXf::Identity(4,4);
-		//change this to est_c
-		torch::Tensor cur_c2w = torch::from_blob(I.data(), {4,4});
+
+		torch::Tensor cur_c2w = estimate_c2w_vec[idx];
 		num_joint_iters = int(num_joint_iters/outer_joint_iters);
-		outer_joint_iters = 1;  // delete this
 		for (int outer_joint_iter=0; outer_joint_iter<outer_joint_iters; outer_joint_iter++)
 		{
-			BA = ((keyframe_list.size() > 4) && (ns_cfg["mapping"]["BA"].as<bool>()) &&(!coarse_mapper));
-			optimize_map(gt_color_t, gt_depth_t, gt_c2w_t, cur_c2w, decoders);
+			BA = ((keyframe_lvector.size() > 4) && (ns_cfg["mapping"]["BA"].as<bool>()) &&(!coarse_mapper));
+			optimize_map(num_joint_iters, c, gt_color_t, gt_depth_t, gt_c2w_t, cur_c2w, decoders);
 			// torch::Tensor sz = torch::tensor(c.at("grid_fine").sizes());
 			if (BA)
 				estimate_c2w_vec[idx] = cur_c2w;
