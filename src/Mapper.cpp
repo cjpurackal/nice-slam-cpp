@@ -490,74 +490,63 @@ void Mapper::optimize_map(int num_joint_iters_, c10::Dict<std::string, torch::Te
 
 }
 
-void Mapper::run(CoFusionReader cfreader, NICE& decoders, c10::Dict<std::string, torch::Tensor>& c, std::vector<torch::Tensor>& estimate_c2w_vec, int idx)
+void Mapper::run(NICE& decoders, c10::Dict<std::string, torch::Tensor>& c, std::vector<torch::Tensor>& estimate_c2w_vec, torch::Tensor gt_color_t, torch::Tensor gt_depth_t, torch::Tensor gt_c2w_t, int idx, int n_imgs)
 {
 	bool init = true;
 	int prev_idx = -1;
 	int outer_joint_iters;
-	/*while*/ if(1)
+	int lr_factor, num_joint_iters;
+
+	if (!init)
 	{
-		// while True waiter TODO
-		cfreader.getNext(); //change to idx based?
-		auto gt_color = cfreader.rgb;
-		auto gt_depth = cfreader.depth; 
-		auto gt_color_t = torch::from_blob(gt_color.data, {cfreader.height, cfreader.width, 3}); // 0-1 range 
-		auto gt_depth_t = torch::from_blob(gt_depth.data, {cfreader.height, cfreader.width});// 1-2 range observed 
-		auto c2w = cfreader.c2w;
-		auto gt_c2w_t = torch::from_blob(c2w.data(), {4, 4});
+		lr_factor = ns_cfg["mapping"]["lr_factor"].as<int>();
+		num_joint_iters = ns_cfg["mapping"]["iters"].as<int>();
 
-		int lr_factor, num_joint_iters;
-		if (!init)
+		if ((idx == n_imgs-1) && (color_refine) && (!coarse_mapper))
 		{
-			lr_factor = ns_cfg["mapping"]["lr_factor"].as<int>();
-			num_joint_iters = ns_cfg["mapping"]["iters"].as<int>();
-
-			if ((idx == cfreader.n_imgs-1) && (color_refine) && (!coarse_mapper))
-			{
-				outer_joint_iters = 5;
-				mapping_window_size *= 2;
-				middle_iter_ratio = 0.0;
-				fine_iter_ratio = 0.0;
-				num_joint_iters *= 5;
-				fix_color = true;
-				frustum_feature_selection = false;
-			}
-			else
-				outer_joint_iters = 1;
+			outer_joint_iters = 5;
+			mapping_window_size *= 2;
+			middle_iter_ratio = 0.0;
+			fine_iter_ratio = 0.0;
+			num_joint_iters *= 5;
+			fix_color = true;
+			frustum_feature_selection = false;
 		}
 		else
-		{
 			outer_joint_iters = 1;
-			lr_factor = ns_cfg["mapping"]["lr_first_factor"].as<int>();
-			num_joint_iters = ns_cfg["mapping"]["iters_first"].as<int>();
-		}
+	}
+	else
+	{
+		outer_joint_iters = 1;
+		lr_factor = ns_cfg["mapping"]["lr_first_factor"].as<int>();
+		num_joint_iters = ns_cfg["mapping"]["iters_first"].as<int>();
+	}
 
 
-		torch::Tensor cur_c2w = estimate_c2w_vec[idx];
-		num_joint_iters = int(num_joint_iters/outer_joint_iters);
-		for (int outer_joint_iter=0; outer_joint_iter<outer_joint_iters; outer_joint_iter++)
+	torch::Tensor cur_c2w = estimate_c2w_vec[idx];
+	num_joint_iters = int(num_joint_iters/outer_joint_iters);
+	for (int outer_joint_iter=0; outer_joint_iter<outer_joint_iters; outer_joint_iter++)
+	{
+		BA = ((keyframe_lvector.size() > 4) && (ns_cfg["mapping"]["BA"].as<bool>()) &&(!coarse_mapper));
+		optimize_map(num_joint_iters, c, gt_color_t, gt_depth_t, gt_c2w_t, cur_c2w, decoders);
+		// torch::Tensor sz = torch::tensor(c.at("grid_fine").sizes());
+		if (BA)
+			estimate_c2w_vec[idx] = cur_c2w;
+
+		// // # add new frame to keyframe set
+		if (outer_joint_iter == outer_joint_iters-1)
 		{
-			BA = ((keyframe_lvector.size() > 4) && (ns_cfg["mapping"]["BA"].as<bool>()) &&(!coarse_mapper));
-			optimize_map(num_joint_iters, c, gt_color_t, gt_depth_t, gt_c2w_t, cur_c2w, decoders);
-			// torch::Tensor sz = torch::tensor(c.at("grid_fine").sizes());
-			if (BA)
-				estimate_c2w_vec[idx] = cur_c2w;
-
-			// // # add new frame to keyframe set
-			if (outer_joint_iter == outer_joint_iters-1)
-			{
-			    if (((idx % keyframe_every == 0) || (idx == cfreader.n_imgs-2)) && (std::find(keyframe_lvector.begin(), keyframe_lvector.end(), idx) == keyframe_lvector.end()))
-			    {
-					keyframe_lvector.push_back(idx);
-					KeyFrame kf;
-					kf.gt_c2w = gt_c2w_t;
-					kf.idx = idx;
-					kf.color = gt_color_t;
-					kf.depth = gt_depth_t;
-					kf.est_c2w = cur_c2w;
-					keyframe_vector.push_back(kf);
-			    }
-			}
+		    if (((idx % keyframe_every == 0) || (idx == n_imgs-2)) && (std::find(keyframe_lvector.begin(), keyframe_lvector.end(), idx) == keyframe_lvector.end()))
+		    {
+				keyframe_lvector.push_back(idx);
+				KeyFrame kf;
+				kf.gt_c2w = gt_c2w_t;
+				kf.idx = idx;
+				kf.color = gt_color_t;
+				kf.depth = gt_depth_t;
+				kf.est_c2w = cur_c2w;
+				keyframe_vector.push_back(kf);
+		    }
 		}
 	}
 }

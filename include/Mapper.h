@@ -19,7 +19,7 @@ class Mapper
 	public:
 		Mapper(YAML::Node ns_config, YAML::Node cf_config, bool coarse_mapper);
 		virtual ~Mapper();
-		void run(CoFusionReader cfreader, NICE& decoders,  c10::Dict<std::string, torch::Tensor>& c_dict, std::vector<torch::Tensor>& estimate_c2w_vec, int idx);
+		void run(NICE& decoders, c10::Dict<std::string, torch::Tensor>& c, std::vector<torch::Tensor>& estimate_c2w_vec, torch::Tensor gt_color_t, torch::Tensor gt_depth_t, torch::Tensor gt_c2w_t, int idx, int n_imgs);
 		void optimize_map(int num_joint_iters_, c10::Dict<std::string, torch::Tensor>& c_dict, torch::Tensor cur_gt_color, torch::Tensor cur_gt_depth, torch::Tensor gt_cur_c2w,  torch::Tensor& cur_c2w, NICE& decoders);
 		void keyframe_selection_overlap(torch::Tensor gt_color_, torch::Tensor gt_depth_, torch::Tensor c2w, std::vector<KeyFrame> keyframe_vector_, int k_overlap, std::vector<int>& selected_kf);
 		void get_mask_from_c2w(cv::Mat depth_mat, torch::Tensor c2w, torch::Tensor val_shape, std::string key, torch::Tensor& mask);

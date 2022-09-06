@@ -88,47 +88,26 @@ torch::Tensor Tracker::optimize_cam_in_batch(torch::Tensor cam_tensor, torch::Te
 	return loss;
 }
 
-void Tracker::update_para_from_mapping()
-{
-	// typename std::map<std::string, torch::Tensor>::iterator it = shared_c.begin();
-	// if (mapping_idx != prev_mapping_idx)
-	// {
-	// 	for(std::pair<std::string, torch::Tensor> element : shared_c )
-	// 	{
-	// 		shared_c[element.first] = element.second; //change shared_c 
-	// 	}
-	// 	prev_mapping_idx = mapping_idx;
-	// }
-}
 
-void Tracker::run(CoFusionReader cfreader, NICE decoders)
+void Tracker::run(NICE decoders, torch::Tensor gt_color_t, torch::Tensor gt_depth_t, torch::Tensor gt_c2w_t, int idx)
 {
-	while(cfreader.hasMore())
+
+
+	torch::Tensor camera_tensor, gt_camera_tensor;
+	gt_camera_tensor = get_tensor_from_camera(gt_c2w_t, false);
+
+	// TO DO
+	camera_tensor = get_tensor_from_camera(gt_c2w_t, false);
+
+	std::vector<torch::Tensor> cam_para_list{camera_tensor};
+	torch::optim::Adam optimizer(cam_para_list, torch::optim::AdamOptions(1e-2));
+
+	auto initial_loss_camera_tensor = torch::abs(gt_camera_tensor-camera_tensor);
+
+	num_cam_iters = 10;
+	for (int i = 0; i < num_cam_iters; ++i)
 	{
-		cfreader.getNext();
-		auto gt_color = cfreader.rgb;
-		auto gt_depth = cfreader.depth; 
-		auto gt_color_t = torch::from_blob(gt_color.data, {cfreader.height, cfreader.width, 3});
-		auto gt_depth_t = torch::from_blob(gt_depth.data, {cfreader.height, cfreader.width});
-
-		auto c2w = cfreader.c2w;
-		auto gt_c2w_t = torch::from_blob(c2w.data(), {4, 4});
-		torch::Tensor camera_tensor, gt_camera_tensor;
-		gt_camera_tensor = get_tensor_from_camera(gt_c2w_t, false);
-		camera_tensor = get_tensor_from_camera(gt_c2w_t, false);
-
-
-		std::vector<torch::Tensor> cam_para_list{camera_tensor};
-		torch::optim::Adam optimizer(cam_para_list, torch::optim::AdamOptions(1e-2));
-
-   		auto initial_loss_camera_tensor = torch::abs(gt_camera_tensor-camera_tensor);
-
-   		num_cam_iters = 10;
-
-   		for (int i = 0; i < num_cam_iters; ++i)
-   		{
-   			auto loss = optimize_cam_in_batch(camera_tensor, gt_color_t, gt_depth_t, tracking_pixels , optimizer, decoders);
-   			std::cout<<"loss: "<<loss<<std::endl;
-   		}
+		auto loss = optimize_cam_in_batch(camera_tensor, gt_color_t, gt_depth_t, tracking_pixels , optimizer, decoders);
+		std::cout<<"loss: "<<loss<<std::endl;
 	}
 }
