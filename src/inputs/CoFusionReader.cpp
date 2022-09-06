@@ -28,6 +28,11 @@ bool CoFusionReader::hasMore()
 		return true;
 }
 
+int CoFusionReader::getIdx()
+{
+	return fptr;
+}
+
 void CoFusionReader::getNext()
 {
 	if (hasMore())
