@@ -1,3 +1,6 @@
+#ifndef RENDERER
+#define RENDERER
+
 #include <Eigen/Core>
 #include <torch/torch.h>
 #include "models/NICE.h"
@@ -15,8 +18,9 @@ class Renderer
 		float perturb;
 		int N_samples, N_surface, N_importance;
 		int scale;
-		Eigen::MatrixXf bound_;
 		torch::Tensor bound;
 		int H,W;
 		float fx, fy, cx, cy;
 };
+
+#endif

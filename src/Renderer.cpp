@@ -1,7 +1,6 @@
 #include "Renderer.h"
 
-Renderer::Renderer():
-bound_(3,2)
+Renderer::Renderer()
 {
 	ray_batch_size = 500000;
 	points_batch_size = 100000;
@@ -22,7 +21,6 @@ torch::Tensor Renderer::eval_points(torch::Tensor p, NICE decoders, c10::Dict<st
 
 	auto p_split = torch::split(p, points_batch_size);
 	std::vector<torch::Tensor> rets;
-	std::cout<<"p_split size :"<<p_split.size()<<std::endl;
 	for (auto& pi: p_split)
 	{
 		auto mask_x = (pi.index({Slice(None), 0}) < bound.index({0,1}))  & (pi.index({Slice(None), 0}) > bound.index({0,0}));
@@ -68,15 +66,14 @@ void Renderer::render_batch_ray(c10::Dict<std::string, torch::Tensor> c, NICE de
 	torch::NoGradGuard noGrad;
 	auto det_rays_o = rays_o.unsqueeze(-1); //rays_o.clone().detach().unsqueeze(-1)  # (N, 3, 1)
 	auto det_rays_d = rays_d.unsqueeze(-1); //rays_o.clone().detach().unsqueeze(-1)  # (N, 3, 1)
-	auto t = (bound.unsqueeze(0) - det_rays_o)/det_rays_d;
+	auto t = (bound.unsqueeze(0).to(torch::Device(torch::kCUDA, 0)) - det_rays_o)/det_rays_d;
 	auto far_bb_ = torch::min(std::get<0>(torch::max(t, 2)),1);
 	auto far_bb = std::get<0>(far_bb_);
 	far_bb = far_bb.unsqueeze(-1);
 	far_bb += 0.01;
-
 	torch::Tensor far, z_vals_surface;
 	if (gt_depth.defined())
-		far = torch::clamp(far_bb, torch::tensor({0}), std::get<0>(torch::max(gt_depth*1.2, 0)));
+		far = torch::clamp(far_bb, torch::tensor({0}).to(torch::Device(torch::kCUDA, 0)), std::get<0>(torch::max(gt_depth*1.2, 0)));
 	else
 		far = far_bb;
 
@@ -87,13 +84,14 @@ void Renderer::render_batch_ray(c10::Dict<std::string, torch::Tensor> c, NICE de
 		gt_none_zero = gt_none_zero.unsqueeze(-1);
 		auto gt_depth_surface = gt_none_zero.tile({1, N_surface});
 		auto t_vals_surface = torch::linspace(0, 1, n_sufrace);
+		t_vals_surface = t_vals_surface.to(torch::Device(torch::kCUDA, 0));
 		auto z_vals_surface_depth_none_zero = 0.95 * gt_depth_surface * (1-t_vals_surface) + 1.05 * gt_depth_surface * (t_vals_surface);
 		z_vals_surface = torch::zeros({gt_depth.sizes()[0], n_sufrace});
+		z_vals_surface = z_vals_surface.to(torch::Device(torch::kCUDA, 0));
 		gt_none_zero_mask = gt_none_zero_mask.squeeze(-1);
 		z_vals_surface.index_put_({gt_none_zero_mask, Slice(None)}, z_vals_surface_depth_none_zero);
-		auto near_surface = 0.001;
 		auto far_surface = std::get<0>(torch::max(gt_depth, 0)); //asuming 0 dim
-		auto z_vals_surface_depth_zero = near_surface * (1.-t_vals_surface) + far_surface * (t_vals_surface);
+		auto z_vals_surface_depth_zero = torch::tensor({0.001}).to(torch::Device(torch::kCUDA, 0))* (1.-t_vals_surface) + far_surface * (t_vals_surface);
 		// auto gt_none_zero_mask_sum = ~gt_none_zero_mask.sum();
 		auto gt_none_zero_mask_sum = gt_depth.sizes()[0]-gt_none_zero_mask.sum();
 		z_vals_surface_depth_zero = z_vals_surface_depth_zero.unsqueeze(0).tile({gt_none_zero_mask_sum.item<int>(), 1});
@@ -101,6 +99,7 @@ void Renderer::render_batch_ray(c10::Dict<std::string, torch::Tensor> c, NICE de
 	}
 
 	auto t_vals = torch::linspace(0, 1, n_samples);
+	t_vals = t_vals.to(torch::Device(torch::kCUDA, 0));
 	
 	torch::Tensor z_vals;
 	if (!lindisp)
@@ -124,5 +123,4 @@ void Renderer::render_batch_ray(c10::Dict<std::string, torch::Tensor> c, NICE de
 	auto raw = eval_points(pointsf, decoders, c, stage);
 	raw = raw.reshape({n_rays, n_samples+n_sufrace, -1});
 	raw2outputs_nerf_color(raw, z_vals, false, rays_d, rgb_map, depth_map, depth_var, weights);
-	// std::cout<<depth_map;
 }
